@@ -23,3 +23,6 @@
 .browser-help { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: .5rem; }
 .browser-help li { margin-bottom: .8rem; }
 .lesson-progress { font-size: .85rem; font-weight: 650; }
+
+footer { text-align: center; font-size: 1rem; }
+footer p { max-width: 70ch; margin: .75rem auto; overflow-wrap: anywhere; }
