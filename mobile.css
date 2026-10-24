@@ -1,0 +1,51 @@
+/* Phone overrides keep the original desktop design intact. */
+#menu-toggle { display: none; }
+@media (max-width: 600px) {
+  .skip:not(:focus) {
+    top: 0;
+    transform: translateY(-100%);
+  }
+  header { padding: 10px 12px; gap: 8px 12px; }
+  header .brand {
+    flex: 1 0 auto;
+    min-width: 0;
+    max-width: 100%;
+    font-size: 1.2rem;
+    line-height: 1.2;
+    overflow-wrap: normal;
+  }
+  #menu-toggle:not([hidden]) { display: block; flex: 0 0 auto; padding: 6px 12px; }
+  #main-navigation {
+    width: 100%;
+    gap: 0;
+  }
+  #main-navigation a {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    width: 100%;
+    padding: 4px 12px;
+    line-height: 1.35;
+  }
+  .text-tools { gap: 6px; font-size: .8rem; }
+  .text-tools button { padding: 4px 8px; min-width: 48px; }
+  main, footer { padding-right: 12px; padding-left: 12px; }
+  #home { padding-top: 12px; padding-bottom: 12px; }
+  .hero { display: flex; flex-direction: column; padding: 14px; }
+  .hero .eyebrow { margin: 0 0 8px; font-size: .7rem; letter-spacing: .04em; }
+  .hero h1 { font-size: 1.6rem; margin: 0 0 12px; line-height: 1.2; }
+  .welcome-actions { order: 1; }
+  .welcome-intro { order: 2; margin: 12px 0 0; }
+  .hero .button { margin: 0 0 10px; padding: .5rem .6rem; line-height: 1.35; }
+  .hero .button:last-child { margin-bottom: 0; }
+  .reassurance { margin: 12px 0 0; }
+  .panel, .card { padding: 14px; }
+  .audio, .scenario { padding: 12px; }
+  .audio { gap: 8px; }
+  .audio strong { width: 100%; }
+  .audio button { padding: .4rem .6rem; }
+  .answer { padding: 12px; gap: 10px; }
+  fieldset, legend, .answer span { min-width: 0; max-width: 100%; }
+  main, header, footer { overflow-wrap: anywhere; }
+  .button, button { max-width: 100%; white-space: normal; }
+}

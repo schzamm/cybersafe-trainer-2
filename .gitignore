@@ -1,0 +1,20 @@
+# Private local backups and maintenance scripts
+.*-backup-*/
+*.original
+*.candidate
+/wording-update-reviewed.ps1
+
+# Credentials (a deliberately reviewed example may be public)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Local dependencies, logs and system artifacts
+node_modules/
+*.log
+Thumbs.db
+.DS_Store
