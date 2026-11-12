@@ -65,7 +65,7 @@ The reviewed repository files contain no manually embedded Cloudflare analytics 
 
 The hosting and analytics configuration described here reflects information supplied by the maintainer. Cloudflare dashboard settings and successful statistics collection were not independently verified during this README review.
 
-**Separate website update needed:** the existing footer in `index.html` still says “No advertising, registration, or tracking.” That blanket privacy statement needs a separate update because Cloudflare Web Analytics has been enabled, even though successful collection is unconfirmed. This README-only change does not update the website footer or change analytics settings.
+The footer in `index.html` now says “No advertising or registration required. Cloudflare Web Analytics is enabled for site traffic measurement.” This describes the enabled setting; it does not establish that statistics are being collected successfully. The earlier footer privacy wording has been corrected. No analytics settings are changed by this documentation.
 
 Scam help contains optional links to official FTC, IdentityTheft.gov, and Medicare websites. They open only when selected and require an internet connection. Their current availability has not been checked online in this development session. Educational content is not an emergency response service.
 
@@ -76,6 +76,9 @@ Scam help contains optional links to official FTC, IdentityTheft.gov, and Medica
 - `styles.css`: shared design and accessible controls.
 - `mobile.css`: phone layout and navigation overrides.
 - `check-mobile.cjs`: a local menu-behavior simulation using only built-in Node.js modules.
+- `tests/regression.test.cjs` and `tests/helpers/app-harness.cjs`: repeatable application regression tests using only built-in Node.js modules and a deterministic DOM/speech/storage model.
+- `tests/browser-check.cjs`: optional real-browser performance, keyboard, layout, and accessibility-tree checks using an already installed Playwright module and Chrome/Edge executable.
+- `tests/README.md`: test commands, browser prerequisites, measurement methodology, and limitations.
 - `README.md`: these instructions.
 - `.gitignore`: exclusions for local backups, private maintenance scripts, credentials, and local artifacts.
 
@@ -87,13 +90,16 @@ If Node.js is already installed, these saved checks can be run from the project 
 node --check app.js
 node --check check-mobile.cjs
 node check-mobile.cjs
+node --test tests/regression.test.cjs
 ```
 
 The saved menu simulation checks 320, 390, 430, and 1200 pixel widths, open/close behavior, Escape, focus return, and desktop/mobile transitions. It does not render CSS.
 
 During the October 25, 2026 README review, both JavaScript syntax checks and the saved menu simulation were rerun successfully. These checks do not verify real voice playback, rendered layout, screen-reader announcements, Cloudflare deployment settings, or visitor-statistics collection.
 
-Additional regression checks have been run in memory during development. They cover all five lessons, all practice answer combinations, feedback, completion requirements, saved progress and storage failures, narration timing and cancellation, same-hash navigation, skip-link focus, distinct review-link names, and multi-tab storage synchronization. These broader checks are not saved as runnable test files in this repository. Do not treat the menu simulation alone as complete application validation.
+The permanent regression suite covers all five lessons, every main/follow-up answer, all warning-sign selection combinations, retries, completion requirements, saved progress and storage failures, narration timing and cancellation, same-hash navigation, skip-link focus, numbered review links, and multi-tab synchronization. It executes the real `app.js` against markup read from `index.html`, with simulated DOM, storage, voice callbacks, and clocks. It does not measure rendered layout, implement the browser's keyboard defaults, or prove screen-reader announcements or audible speech. Do not treat model tests alone as complete browser validation.
+
+The separate browser runner never installs dependencies or downloads a browser. It requires an already installed Playwright module and Chrome/Edge executable; see `tests/README.md`. It measures the live homepage and direct Lesson 1 URL with mobile emulation and cold/warm HTTP-cache loads, then checks the local source at 320px/150% text using a temporary loopback-only server. Reports and screenshots go into ignored `tests/artifacts/`. Browser results and measured limitations are recorded separately; no performance improvement is claimed without measurements.
 
 Manual browser testing is still required:
 
@@ -104,7 +110,7 @@ Manual browser testing is still required:
 5. Listen in supported browsers. Test Pause/Play during speech and gaps, Stop, repeated clicks, new answers, lesson changes, unavailable voices, and quiet mode.
 6. Check the deployed site's assets, all five lesson links (including a link already in the address), Back/Forward navigation, and external help links. Test real phones as well as responsive desktop views.
 
-The reported Chrome live-site result, Edge narration result, Firefox limitation, and prior responsive-mode testing do not certify every browser or phone. Broader rendered-layout, actual-speech, and assistive-technology checks still require manual testing. Analytics collection must also be verified separately before reporting it as operational.
+The reported Chrome live-site result, Edge narration result, Firefox limitation, and automated browser checks do not certify every browser or phone. Actual speech, physical devices, and assistive-technology announcements still require manual testing. Analytics collection must also be verified separately before reporting it as operational.
 
 ## Prepare a public repository safely
 
@@ -115,12 +121,13 @@ Review the file list before any commit or upload. The intended public source fil
 README.md
 app.js
 check-mobile.cjs
+tests/
 index.html
 mobile.css
 styles.css
 ```
 
-Keep historical hidden backup directories, `*.original`, `*.candidate`, the private `wording-update-reviewed.ps1` maintenance script, credential files, and local logs out of the public repository. Do not execute the maintenance script as part of publishing. Existing backup folders can remain on your computer.
+Keep historical hidden backup directories, `*.original`, `*.candidate`, the private `wording-update-reviewed.ps1` maintenance script, credential files, local logs, and generated `tests/artifacts/` out of the public repository. The test source and documentation may be public; test screenshots and transient reports are ignored. Do not execute the maintenance script as part of publishing. Existing backup folders can remain on your computer.
 
 The ignore rules do not remove files already tracked or erase history. Inspect both tracked files and ignored/untracked files before publishing. Resolve any Git inspection errors before assuming a file is private. Never upload the whole local folder indiscriminately.
 
