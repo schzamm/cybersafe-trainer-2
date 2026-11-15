@@ -441,17 +441,17 @@ function renderIntroduction(parent, text, term) {
   );
 }
 
-function lessonSpeechSegments(lesson, index, feedback) {
+function lessonSpeechSegments(lesson, index, feedback, openingOnly = false) {
   const text = [
     lesson.title,
     lesson.intro,
     'Warning signs.',
     ...lesson.signs,
-    'Scenario.',
+    ...(openingOnly ? [] : ['Scenario.',
     lesson.scenario,
     lesson.question,
     ...lesson.answers.map((answer, i) => `Option ${i + 1}. ${answer}`),
-    feedback
+    feedback])
   ].join(' ');
   const titleEnd = lesson.title.length;
   const segments = [{ text: text.slice(0, titleEnd), pauseAfterMs: 400 }];
@@ -467,7 +467,35 @@ function lessonSpeechSegments(lesson, index, feedback) {
   return segments;
 }
 
-function stopAudio() {
+// A reserved viewport row keeps the player visible without covering page content.
+function showFloatingPlayer() {
+  if (current < 0 || !$('floating-player').hidden) return;
+  const top = typeof window.scrollY === 'number' ? window.scrollY : 0;
+  $('floating-player').hidden = false;
+  $('audio-player-focus').hidden = false;
+  document.documentElement.setAttribute('data-audio-player','open');
+  $('page-content').scrollTop = top;
+}
+function hideFloatingPlayer() {
+  if ($('floating-player').hidden) return;
+  const returnFocus = $('floating-player').contains(document.activeElement);
+  const top = $('page-content').scrollTop || 0;
+  $('floating-player').hidden = true;
+  $('audio-player-focus').hidden = true;
+  document.documentElement.setAttribute('data-audio-player','closed');
+  if (typeof window.scrollTo === 'function') window.scrollTo({top,behavior:'instant'});
+  if (returnFocus && !$('lesson').hidden) $('play').focus();
+}
+function syncFloatingPlayer() {
+  const phase = speechSession && speechSession.phase;
+  const running = phase && phase !== 'paused';
+  $('floating-toggle').textContent = running ? 'Pause'
+    : phase === 'paused' ? 'Play'
+    : lessonAudio && lessonAudio.waiting ? 'Continue lesson' : 'Play';
+}
+
+function stopAudio(keepPlayer = false) {
+  clearNarrationTarget();
   const session = speechSession;
   speechSession = null;
   utterance = null;
@@ -475,11 +503,14 @@ function stopAudio() {
   if (speech) window.speechSynthesis.cancel();
   $('audio-status').textContent = '';
   $('explanation-speech-status').textContent = '';
+  updateLessonAudioLabel();
+  if (keepPlayer !== true) hideFloatingPlayer();
+  syncFloatingPlayer();
   // Keep this lesson's audio preference for subsequent answers.
 }
 
-function readText(input, explanation = false) {
-  stopAudio();
+function readText(input, explanation = false, observer = null) {
+  stopAudio(true);
   const status = explanation
     ? $('explanation-speech-status')
     : $('audio-status');
@@ -490,6 +521,7 @@ function readText(input, explanation = false) {
     return;
   }
 
+  showFloatingPlayer();
   const synth = window.speechSynthesis;
   const segments = typeof input === 'string'
     ? [{ text: input, pauseAfterMs: 0 }]
@@ -542,8 +574,9 @@ function readText(input, explanation = false) {
   }
 
   function readingStatus() {
+    syncFloatingPlayer();
     status.textContent = explanation
-      ? 'Reading the explanation. Use Pause and Stop above to control reading.'
+      ? 'Reading the explanation. Use Pause or Stop to control reading.'
       : 'Reading aloud.';
     if (explanation) {
       $('audio-status').textContent = 'Reading the explanation aloud.';
@@ -569,13 +602,17 @@ function readText(input, explanation = false) {
     session.phase = 'finished';
     speechSession = null;
     utterance = null;
+    clearNarrationTarget();
     status.textContent = 'Finished reading.';
     if (explanation) $('audio-status').textContent = '';
+    if (observer && observer.complete) observer.complete();
+    syncFloatingPlayer();
   }
 
   function startGap(milliseconds) {
     clearGap();
     session.phase = 'gap';
+    syncFloatingPlayer();
     gapRemaining = milliseconds;
     gapDeadline = performance.now() + milliseconds;
     const epoch = gapEpoch;
@@ -605,13 +642,13 @@ function readText(input, explanation = false) {
         if (!current() || utterance !== reading) return;
         utterance = null;
         session.index++;
-        if (session.index === segments.length) {
-          finish();
+        if (session.phase === 'paused') {
+          pausedPhase = session.index === segments.length ? 'completed' : 'gap';
+          gapRemaining = segment.pauseAfterMs;
           return;
         }
-        if (session.phase === 'paused') {
-          pausedPhase = 'gap';
-          gapRemaining = segment.pauseAfterMs;
+        if (session.index === segments.length) {
+          finish();
           return;
         }
         startGap(segment.pauseAfterMs);
@@ -627,6 +664,7 @@ function readText(input, explanation = false) {
 
       if (synth.paused) synth.resume();
       readingStatus();
+      if (observer) showNarrationTarget(observer.target);
       synth.speak(reading);
     } catch {
       playbackFailure();
@@ -636,6 +674,7 @@ function readText(input, explanation = false) {
   function waitForVoice(milliseconds) {
     clearVoiceWait();
     session.phase = 'loading';
+    syncFloatingPlayer();
     voiceDeadline = performance.now() + milliseconds;
     const epoch = voiceEpoch;
     const active = () =>
@@ -694,8 +733,10 @@ function readText(input, explanation = false) {
       }
       session.phase = 'paused';
       if (pausedPhase === 'speaking') synth.pause();
+      $('play').textContent = '▶ Play';
       status.textContent = 'Paused. Select Play to continue.';
       $('audio-status').textContent = 'Paused. Select Play to continue.';
+      syncFloatingPlayer();
     } catch {
       playbackFailure();
     }
@@ -704,7 +745,9 @@ function readText(input, explanation = false) {
   function resume() {
     if (!current() || session.phase !== 'paused') return;
     try {
-      if (pausedPhase === 'loading') {
+      if (pausedPhase === 'completed') {
+        finish();
+      } else if (pausedPhase === 'loading') {
         waitForVoice(voiceRemaining);
       } else if (pausedPhase === 'gap') {
         readingStatus();
@@ -748,6 +791,7 @@ function practiceFeedback(form, text) {
 }
 
 function renderPractice(index) {
+  practiceAudio={};
   const activity = optionalPractice[index];
   function build(host, kind) {
     host.replaceChildren();
@@ -755,6 +799,7 @@ function renderPractice(index) {
     const details = document.createElement('details');
     details.className = 'practice';
     const summary = document.createElement('summary');
+    summary.id = kind+'-practice-heading';
     summary.textContent = warning
       ? 'Practice spotting the warning signs'
       : 'Try another situation';
@@ -808,9 +853,7 @@ function renderPractice(index) {
     const read = document.createElement('button');
     read.type = 'button';
     read.textContent = 'Read practice aloud';
-    read.addEventListener('click', () => {
-      audioEnabled = true;
-      readText([
+    practiceAudio[kind]={target:summary.id,label:summary.textContent,optional:true,segments:()=>([
         { text: summary.textContent, pauseAfterMs: 400 },
         {
           text: [
@@ -821,17 +864,23 @@ function renderPractice(index) {
           ].join(' '),
           pauseAfterMs: 0
         }
-      ]);
+      ])};
+    read.addEventListener('click', () => {
+      audioEnabled=true;
+      selectLessonAudioTarget(summary.id);
+      playLessonAudio();
     });
     const skip = document.createElement('button');
     skip.type = 'button';
     skip.textContent = 'Skip this practice';
     skip.addEventListener('click', () => {
-      stopAudio();
+      selectLessonAudioTarget('quiz');
       details.open = false;
       if (warning) {
-        $('question').setAttribute('tabindex', '-1');
-        $('question').focus();
+        const quiz=$('lesson-one-quiz');
+        const destination=quiz && !quiz.open ? $('lesson-one-quiz-toggle') : $('question');
+        destination.setAttribute('tabindex', '-1');
+        destination.focus();
       } else summary.focus();
     });
     const actions = document.createElement('div');
@@ -862,7 +911,7 @@ function renderPractice(index) {
       }
     });
     details.addEventListener('toggle', () => {
-      if (!details.open && host.contains(details)) stopAudio();
+      if (!details.open && host.contains(details) && speechSession && lessonAudio && lessonAudio.sections[lessonAudio.index].target===summary.id) stopAudio(true);
     });
     details.append(summary, form);
     if (!warning && index === 3) addBrowserHelp(details);
@@ -876,6 +925,7 @@ function addBrowserHelp(parent) {
   const help = document.createElement('details');
   help.className = 'browser-help';
   const summary = document.createElement('summary');
+  summary.id='browser-help-heading';
   summary.textContent = 'How to close a browser that will not respond';
   const steps = [
     'First, try the browser’s own close button or close the suspicious tab. Do not use buttons inside the warning or call its displayed number.',
@@ -895,10 +945,489 @@ function addBrowserHelp(parent) {
   read.textContent = 'Read these instructions aloud';
   read.addEventListener('click', () => {
     audioEnabled = true;
-    readText([summary.textContent, ...steps].join(' '));
+    selectLessonAudioTarget(summary.id);
+    playLessonAudio();
   });
+  practiceAudio.help={target:summary.id,label:summary.textContent,optional:true,segments:()=>[{text:[summary.textContent,...steps].join(' '),pauseAfterMs:0}]};
   help.append(summary, list, read);
   parent.append(help);
+}
+
+
+// Shared audio bookmarks never hide, unlock or complete page content.
+let lessonAudio = null;
+let narrationTarget = null;
+function clearNarrationTarget() {
+  if (narrationTarget) narrationTarget.setAttribute('data-narrating', 'false');
+  narrationTarget = null;
+}
+function showNarrationTarget(id) {
+  if (!id) return;
+  let target = $(id);
+  let parent=target.parentElement;
+  while(parent){
+    if(parent.tagName==='DETAILS' && !parent.open)target=parent.querySelector('summary');
+    parent=parent.parentElement;
+  }
+  if (target === narrationTarget) return;
+  clearNarrationTarget();
+  narrationTarget = target;
+  target.setAttribute('data-narrating', 'true');
+  target.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+}
+function updateLessonAudioLabel() {
+  if (current < 0 || !lessonAudio) return;
+  $('play').textContent = lessonAudio.waiting ? 'Continue lesson' : '▶ Play';
+  syncFloatingPlayer();
+}
+function bankTeachingSections() {
+  const lesson = lessons[0];
+  const section = (title, body) => [{ text: title, pauseAfterMs: 400 },
+    ...body.split(/(?<=[.!?])(?=\s+[A-Z])/u).map(text => ({ text, pauseAfterMs: 0 }))];
+  const term = lessonTerms[0];
+  const end = lesson.intro.indexOf(term) + term.length;
+  const opening = [{text: lesson.title, pauseAfterMs:400},
+    {text:lesson.intro.slice(0,end),pauseAfterMs:200},{text:lesson.intro.slice(end),pauseAfterMs:0}];
+  return [
+    {target:'lesson-introduction',segments:opening},
+    {target:'lesson-warning-signs',segments:section('Warning signs.',lesson.signs.join(' '))},
+    {target:'bank-email-panel',exercise:true,segments:section("Let's check two examples.",
+      'These examples are safe to explore. The first is an account sign-in email. Use the Investigate buttons to look for warning signs.'),
+      example:section('Simulated email.',
+        'Subject: New sign-in to your Northbridge Bank account. Sender: Northbridge Bank Security, alerts@northbridge-access.example. '+
+        'To: alex@inbox.example. Today, 9:41 AM. Hello Alex. '+
+        'We noticed a sign-in from a new device. If this was you, no action is needed. If you do not recognize this activity, review your account below. '+
+        'Review within 30 minutes to prevent a temporary account restriction. The message offers to review account activity.')},
+    {target:'bank-text-panel',exercise:true,segments:section('The second example is a bank fraud text about an unfamiliar purchase.',
+      'Use the Investigate buttons to examine the sender and the reply request.'),
+      example:section('Simulated text message.',
+        'From Northbridge Bank. Today, 9:42 AM. Northbridge Bank Fraud Alert. '+
+        'Did you attempt a $786.42 debit-card purchase at Alder Home Market? Reply YES if this was you or NO if you do not recognize this purchase.')},
+    {target:'simulation-content',exercise:true,segments:section("Now let's investigate another suspicious email.",
+      'Examine the sender, link, and warning signs. Then decide whether you would trust or report the message.'),
+      example:section('Simulated investigation email.',
+        'From Northbridge Bank. Subject: Please verify your account today. We noticed an unusual sign-in. Verify your account within 30 minutes to avoid a temporary restriction. The message asks you to verify your account.')},
+    {target:'lesson-scenario',segments:section('Lesson scenario.',lesson.scenario)},
+    {target:'quiz',segments:section('Main question.',[lesson.question,
+      ...lesson.answers.map((answer,i)=>`Option ${i+1}. ${answer}`),'Choose an answer, then select Check my answer.'].join(' '))}
+  ];
+}
+let practiceAudio = {};
+function speechIntroduction(lesson,index) {
+  const text=lesson.title+' '+lesson.intro;
+  const titleEnd=lesson.title.length;
+  const term=lessonTerms[index], position=term ? lesson.intro.indexOf(term) : -1;
+  const segments=[{text:lesson.title,pauseAfterMs:400}];
+  if(position>=0){
+    const end=titleEnd+1+position+term.length;
+    segments.push({text:text.slice(titleEnd,end),pauseAfterMs:200},{text:text.slice(end),pauseAfterMs:0});
+  }else segments.push({text:text.slice(titleEnd),pauseAfterMs:0});
+  return segments;
+}
+function resetLessonAudio(index) {
+  const lesson=lessons[index];
+  const sections=index===0 ? bankTeachingSections() : [
+    {target:'lesson-introduction',segments:speechIntroduction(lesson,index)},
+    {target:'lesson-warning-signs',segments:[{text:' Warning signs.',pauseAfterMs:400},{text:' '+lesson.signs.join(' '),pauseAfterMs:0}]},
+    {target:'lesson-scenario',segments:[{text:' Scenario.',pauseAfterMs:400},{text:' '+lesson.scenario,pauseAfterMs:0}]},
+    {target:'quiz',segments:()=>[{text:' '+[lesson.question,...lesson.answers.map((answer,i)=>`Option ${i+1}. ${answer}`),!$('feedback').hidden ? $('feedback').textContent : ''].join(' '),pauseAfterMs:0}]}
+  ];
+  const quizIndex=sections.findIndex(section=>section.target==='quiz');
+  sections.splice(quizIndex,0,practiceAudio.warning);
+  sections.push(practiceAudio.followup);
+  if(practiceAudio.help)sections.push(practiceAudio.help);
+  const labels={
+    'lesson-introduction':$('lesson-title').textContent,
+    'lesson-warning-signs':$('lesson-warning-signs').querySelector('h3').textContent,
+    'bank-email-panel':index===0 ? $('bank-email-heading').textContent : '',
+    'bank-text-panel':index===0 ? $('bank-text-heading').textContent : '',
+    'simulation-content':index===0 ? $('simulation-heading').textContent : '',
+    'lesson-scenario':$('lesson-scenario').querySelector('h3').textContent,
+    quiz:index===0 ? $('lesson-one-quiz-toggle').textContent : $('question').textContent
+  };
+  sections.forEach(section=>{section.label=section.label || labels[section.target];});
+  lessonAudio={lesson:index,index:0,waiting:false,finished:false,sections};
+  for(const id of ['read-from','floating-read-from']){
+    const select=$(id);select.replaceChildren();
+    sections.forEach((section,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=section.label;select.append(option);});
+  }
+  syncReadFrom();
+  $('play').textContent='▶ Play';
+}
+function syncReadFrom() {
+  if(!lessonAudio)return;
+  for(const id of ['read-from','floating-read-from'])$(id).value=String(lessonAudio.index);
+}
+function selectLessonAudioSection(value,keepPlayer=!$('floating-player').hidden) {
+  const index=Number(value);
+  if(!lessonAudio || !Number.isInteger(index) || index<0 || index>=lessonAudio.sections.length)return;
+  stopAudio(keepPlayer);
+  lessonAudio.index=index;lessonAudio.waiting=false;lessonAudio.finished=false;
+  syncReadFrom();updateLessonAudioLabel();
+  $('audio-status').textContent=speech ? 'Selected: '+lessonAudio.sections[index].label+'. Select Play to listen from here.' : 'Read aloud is not available in this browser. All lesson text remains available on the page.';
+}
+function selectLessonAudioTarget(target,keepPlayer=!$('floating-player').hidden) {
+  if(!lessonAudio)return;
+  const index=lessonAudio.sections.findIndex(section=>section.target===target);
+  if(index>=0)selectLessonAudioSection(index,keepPlayer);
+}
+function stopLessonAudio() {
+  stopAudio();
+  if(lessonAudio){lessonAudio.waiting=false;lessonAudio.finished=false;syncReadFrom();updateLessonAudioLabel();}
+}
+function playLessonAudio() {
+  const flow = lessonAudio;
+  if (!flow || current < 0 || speechSession) return;
+  audioEnabled = true;
+  if (flow.finished) flow.finished=false;
+  if (flow.waiting) {flow.index++;flow.waiting=false;}
+  updateLessonAudioLabel();
+  const section = flow.sections[flow.index];
+  syncReadFrom();
+  const segments = typeof section.segments === 'function' ? section.segments() : section.segments;
+  readText(segments,false,{
+    target:section.target,
+    complete() {
+      if (lessonAudio !== flow) return;
+      if (section.exercise) {
+        flow.waiting=true;
+        updateLessonAudioLabel();
+        $('audio-status').textContent = 'Narration is paused while you explore this example. Select Read Example to hear the message, or Continue lesson when ready.';
+      } else if (section.optional || !flow.sections.some((entry,index)=>index>flow.index && !entry.optional)) {
+        flow.finished=true;
+        $('audio-status').textContent = section.optional ? 'Practice reading finished. You can try the activity or select another section in Read from.' : 'Lesson narration finished. Choose an answer and select Check my answer.';
+      } else {
+        flow.index=flow.sections.findIndex((entry,index)=>index>flow.index && !entry.optional);
+        playLessonAudio();
+      }
+    }
+  });
+}
+function readLessonOneExtra(segments,target) {
+  if (!lessonAudio || current !== 0) return;
+  audioEnabled=true;
+  if (lessonAudio.sections[lessonAudio.index].exercise) lessonAudio.waiting=true;
+  readText(segments,false,{
+    target,
+    complete() {
+      updateLessonAudioLabel();
+      $('audio-status').textContent = lessonAudio && lessonAudio.waiting
+        ? 'Example reading finished. Narration is paused while you explore. Select Continue lesson when ready.'
+        : 'Reading finished. Select Play to resume the lesson from this section.';
+    }
+  });
+  $('play').textContent = '▶ Play';
+}
+function readExampleButton(id,index) {
+  const button=document.createElement('button');
+  button.id=id;
+  button.type='button';
+  button.textContent='Read Example';
+  button.setAttribute('aria-label', 'Read Example — '+['scam email','scam text message','scam investigation'][index-2]);
+  button.addEventListener('click',()=>{
+    if (current !== 0 || !lessonAudio) return;
+    const section=lessonAudio.sections[index];
+    readLessonOneExtra(section.example,section.target);
+  });
+  return button;
+}
+function readBankDetail(text, target = null) {
+  if (audioEnabled && current === 0) readLessonOneExtra([{text,pauseAfterMs:0}],target);
+}
+function dismissBankDetail() { stopAudio(true); }
+
+function buildBankExamples() {
+  function node(tag, text, cls) {
+    const item = document.createElement(tag);
+    if (text) item.textContent = text;
+    if (cls) item.className = cls;
+    return item;
+  }
+  const section = node('section', '', 'bank-examples');
+  section.id = 'bank-examples';
+  const heading = node('h3', "Let's Check Two Examples");
+  heading.id = 'bank-examples-heading';
+  section.setAttribute('aria-labelledby', heading.id);
+  section.append(heading, node('p', 'Examine these simulated messages for warning signs. Use the Investigate buttons to learn what makes each message suspicious. These examples are safe to explore.'), node('p','For comparison, your usual bank website is northbridge.example. The Investigate buttons only reveal explanations; nothing is sent or opened.'));
+  function example(id, title, cls) {
+    const wrapper = node('section', '', 'message-example');
+    const label = node('h4', title);
+    label.id = id + '-heading';
+    wrapper.id = id + '-panel';
+    wrapper.setAttribute('aria-labelledby', label.id);
+    const mock = node('article', '', cls);
+    mock.setAttribute('aria-label', title);
+    const clues = node('div', '', 'message-clues');
+    const status = node('p');
+    status.id = id + '-status';
+    status.hidden = true;
+    const announcement = node('p', '', 'clue-announcement');
+    announcement.id = id + '-announcement';
+    announcement.setAttribute('role', 'status');
+    announcement.setAttribute('aria-atomic', 'true');
+    const controls = [];
+    const explanations = new Map();
+    function updateClues() {
+      const count = [...clues.children].filter(detail => !detail.hidden).length;
+      controls.forEach(control => {
+        const detail = $(control.getAttribute('aria-controls'));
+        control.setAttribute('aria-expanded', String(!detail.hidden));
+        control.setAttribute('aria-describedby', detail.hidden ? introduction.id : detail.id);
+      });
+      reset.disabled = count === 0;
+      reset.hidden = count === 0;
+      reset.textContent = count === 1 ? 'Close' : 'Close all';
+      status.hidden = count === 0;
+      status.textContent = count ? `${count} ${count === 1 ? 'clue open' : 'clues open'}.` : 'No clues open.';
+      announcement.textContent = count ? status.textContent : 'All clues closed. You can investigate again.';
+    }
+    function clue(key, text, explanation, style) {
+      const group = node('div', '', 'message-detail');
+      const evidence = node('span', text, 'message-evidence ' + (style || ''));
+      const button = node('button', 'Investigate', 'message-hotspot');
+      const names = {sender:'sender',urgency:'time limit',review:'account-review request',purchase:'purchase details',request:'reply request','reply-yes':'YES reply','reply-no':'NO reply'};
+      button.setAttribute('aria-label','Investigate '+(names[key] || key));
+      button.id = id + '-' + key;
+      button.type = 'button';
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-controls', button.id + '-detail');
+      let detail = explanations.get(explanation);
+      if (!detail) {
+        detail = node('p', explanation, 'message-clue');
+        detail.id = button.id + '-detail';
+        detail.hidden = true;
+        explanations.set(explanation, detail);
+        clues.append(detail);
+      }
+      button.setAttribute('aria-controls', detail.id);
+      button.setAttribute('aria-describedby', introduction.id);
+      button.addEventListener('click', () => {
+        detail.hidden = !detail.hidden;
+        updateClues();
+        if (!detail.hidden && audioEnabled) readBankDetail(explanation,detail.id);
+        else if (detail.hidden) dismissBankDetail();
+      });
+      controls.push(button);
+      group.append(evidence,button);
+      return group;
+    }
+    const reset = node('button', 'Close');
+    reset.disabled = true;
+    reset.hidden = true;
+    reset.type = 'button';
+    reset.id = id + '-reset';
+    reset.addEventListener('click', () => {
+      stopAudio(true);
+      dismissBankDetail();
+      controls.forEach(button => button.setAttribute('aria-expanded', 'false'));
+      [...clues.children].forEach(item => { item.hidden = true; });
+      updateClues();
+      controls[0].focus();
+    });
+    const tools = node('div', '', 'practice-actions');
+    tools.append(readExampleButton(id+'-read',id === 'bank-email' ? 2 : 3),reset);
+    const introduction = node('p', id === 'bank-email'
+      ? 'Use the Investigate buttons to examine this email’s sender, time limit, and account-review request. No link opens.'
+      : 'Use the Investigate buttons to examine this text and its reply request. No reply is sent.', 'message-instructions');
+    introduction.id = id + '-instructions';
+    status.textContent = 'No clues open.';
+    wrapper.append(label, introduction, mock, clues, status, announcement, tools);
+    section.append(wrapper);
+    return { mock, clue };
+  }
+  const email = example('bank-email', 'Account sign-in email', 'opened-email');
+  email.mock.append(node('p', 'Inbox  /  Open message', 'message-chrome'),
+    node('h4', 'New sign-in to your Northbridge Bank account'),
+    email.clue('sender', 'Northbridge Bank Security <alerts@northbridge-access.example>',
+      'The display name sounds familiar, but the sender uses northbridge-access.example, not your usual northbridge.example. Similar names can mislead. Check through your usual banking app or the number on your bank card.'),
+    node('p', 'To: alex@inbox.example', 'message-meta'),
+    node('p', 'Today, 9:41 AM', 'message-meta'),
+    node('p', 'Hello Alex,'),
+    node('p', 'We noticed a sign-in from a new device. If this was you, no action is needed. If you do not recognize this activity, review your account below.'),
+    email.clue('urgency', 'Review within 30 minutes to prevent a temporary account restriction.',
+      'A possible sign-in can feel urgent. The short deadline and threatened restriction add pressure. Do not let a timer replace a separate check.'),
+    email.clue('review', 'Review account activity',
+      'This button points to https://northbridge-account.example/review, not northbridge.example. Here it only reveals this explanation. In a real message, use your usual app instead of an unexpected link.', 'message-review'),
+    node('p', 'Northbridge Bank · Account Security', 'message-meta'));
+  const sms = example('bank-text', 'Bank fraud text', 'phone-message');
+  sms.mock.append(node('p', '9:42', 'phone-clock'),
+    sms.clue('sender', 'Northbridge Bank',
+      'A sender name does not verify who sent a text. Names and numbers can be disguised. Open your usual bank app or call the number on your card to check.'),
+    node('p', 'Text message · Today 9:42 AM', 'message-meta'));
+  const bubble = node('div', '', 'text-bubble');
+  bubble.append(node('p', 'Northbridge Bank Fraud Alert'),
+    sms.clue('purchase', 'Did you attempt a $786.42 debit-card purchase at Alder Home Market?',
+      'An unfamiliar, precise purchase amount can make you react quickly. The amount is not proof that a purchase happened. Check transactions independently in your usual banking app.'),
+    sms.clue('request', 'Reply YES if this was you or NO if you do not recognize this purchase.',
+      'Scammers use YES/NO fraud alerts to begin a conversation, sometimes followed by a call from a fake fraud team. Some genuine alerts also use replies, so the wording alone is not proof. Verify independently before responding.'));
+  sms.mock.append(bubble);
+  const replies = node('div', '', 'text-replies');
+  for (const answer of ['YES', 'NO']) replies.append(sms.clue('reply-' + answer.toLowerCase(), answer,
+    'No reply was sent. Either response can engage a scammer. Leave this unexpected conversation and check with your bank through your usual app or the number on your card.'));
+  sms.mock.append(replies);
+  return section;
+}
+
+function renderPhishingSimulation(index) {
+  const host = $('phishing-simulation');
+  host.replaceChildren();
+  host.hidden = index !== 0;
+  if (index !== 0) return;
+
+  function textNode(tag, text, className) {
+    const node = document.createElement(tag);
+    node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+  function button(id, label) {
+    const node = textNode('button', label);
+    node.id = id;
+    node.type = 'button';
+    return node;
+  }
+  const details = document.createElement('section');
+  details.id = 'simulation-content';
+  details.className = 'practice simulation';
+  details.setAttribute('aria-labelledby', 'simulation-heading');
+  const summary = textNode('h3', 'Scam Investigation: Is This Email Real?');
+  summary.id = 'simulation-heading';
+  const safety = textNode('p',
+    'Optional investigation. An email has arrived claiming to be from your bank. Explore the clues and decide whether it deserves your trust. Nothing here sends a message or opens another website. The addresses and email are fictional.');
+  safety.id = 'simulation-safety';
+  const reference = textNode('p', 'A detail to compare: your usual bank website in this investigation is ');
+  reference.append(textNode('code', 'northbridge.example'));
+  const email = document.createElement('article');
+  email.className = 'simulation-email';
+  email.setAttribute('aria-labelledby', 'simulation-subject');
+  const inbox = textNode('p', 'Fictional inbox — practice only', 'eyebrow');
+  const subject = textNode('h3', 'Please verify your account today');
+  subject.id = 'simulation-subject';
+  const from = textNode('p', 'From: Northbridge Bank');
+  const body = textNode('p',
+    'We noticed an unusual sign-in. Verify your account within 30 minutes to avoid a temporary restriction.');
+  const verify = button('simulation-verify', 'Verify account');
+  verify.setAttribute('aria-label', 'Verify account — inspect the fictional destination only');
+  verify.setAttribute('aria-describedby', 'simulation-safety');
+  email.append(inbox, from, subject, body, verify);
+  const inspection = document.createElement('div');
+  inspection.className = 'simulation-inspection';
+  const announcement = textNode('p', '');
+  announcement.id = 'simulation-action-status';
+  announcement.setAttribute('role', 'status');
+  announcement.setAttribute('aria-atomic', 'true');
+
+  function clue(id, label, introduction, value, explanation) {
+    const control = button(id, label);
+    control.setAttribute('aria-controls', id + '-detail');
+    control.setAttribute('aria-expanded', 'false');
+    const region = document.createElement('div');
+    region.id = id + '-detail';
+    region.className = 'simulation-clue';
+    region.hidden = true;
+    region.append(textNode('p', introduction), textNode('code', value), textNode('p', explanation));
+    function reveal(open) {
+      region.hidden = !open;
+      control.setAttribute('aria-expanded', String(open));
+    }
+    control.addEventListener('click', () => {
+      reveal(region.hidden);
+      if (!region.hidden && audioEnabled) readBankDetail(region.textContent,region.id);
+      else if (region.hidden) dismissBankDetail();
+    });
+    inspection.append(control, region);
+    return { control, region, reveal };
+  }
+  const sender = clue('simulation-sender', 'Investigate the Sender',
+    'Full sender address:', 'security@northbridge-support.example',
+    'Compare the part after @ with the usual bank website shown above. The displayed name alone does not establish who sent the message.');
+  const destination = clue('simulation-destination', 'Investigate the Link',
+    'The verification button displays this fictional destination as text only:',
+    'https://northbridge-check.example/verify',
+    'Compare the website name with northbridge.example. Nothing opens when you inspect it.');
+  const pressure = clue('simulation-pressure', 'Investigate the Warning Signs',
+    'Notice the time limit:', 'within 30 minutes',
+    'A short deadline can pressure you to act before checking. You can pause and verify a request independently.');
+  function revealDestination(open) {
+    destination.reveal(open);
+    verify.setAttribute('aria-expanded', String(open));
+  }
+  destination.control.addEventListener('click', () => {
+    verify.setAttribute('aria-expanded', String(!destination.region.hidden));
+  });
+  verify.setAttribute('aria-controls', 'simulation-destination-detail');
+  verify.setAttribute('aria-expanded', 'false');
+  verify.addEventListener('click', () => {
+    revealDestination(true);
+    announcement.textContent = 'A clue to investigate: the destination is shown below the email. No website opened.';
+    if (audioEnabled) readBankDetail(destination.region.textContent,destination.region.id);
+  });
+
+  const question = textNode('p', 'What do the clues tell you? Investigate the sender, link and warning signs, then decide what you would do with this message. You can revisit any example.');
+  const decisions = document.createElement('div');
+  decisions.className = 'practice-actions';
+  decisions.setAttribute('role', 'group');
+  decisions.setAttribute('aria-label', 'Email investigation decision');
+  const trust = button('simulation-trust', 'Trust this message');
+  const report = button('simulation-report', 'Report as suspicious');
+  const feedback = document.createElement('div');
+  feedback.id = 'simulation-feedback';
+  feedback.setAttribute('role', 'status');
+  feedback.setAttribute('aria-live', 'polite');
+  feedback.setAttribute('aria-atomic', 'true');
+  const warningSigns =
+    'The sender uses northbridge-support.example, while your usual fictional bank website is northbridge.example. ' +
+    'The verification destination is northbridge-check.example, a different website again. ' +
+    'The 30-minute deadline adds pressure. A familiar display name does not verify the sender. ' +
+    'In a real situation, leave the link alone and check through your usual banking app or a number from your bank card.';
+  function decide(choice) {
+    stopAudio();
+    announcement.textContent = '';
+    feedback.className = 'feedback';
+    feedback.textContent = (choice === 'report'
+      ? 'Your investigation points to a suspicious message. Here is how the clues fit together. '
+      : 'A familiar bank name can make this message look convincing. Let’s look more closely at the clues before trusting it. ') +
+      warningSigns + ' Nothing was sent or opened. You can revisit the clues, reconsider your choice or restart the investigation.';
+    if (audioEnabled) readBankDetail(feedback.textContent,feedback.id);
+  }
+  trust.addEventListener('click', () => decide('trust'));
+  report.addEventListener('click', () => decide('report'));
+  decisions.append(trust, report);
+  const tools = document.createElement('div');
+  tools.className = 'practice-actions';
+  const reset = button('simulation-reset', 'Restart investigation');
+  reset.addEventListener('click', () => {
+    stopAudio(true);
+    dismissBankDetail();
+    sender.reveal(false);
+    revealDestination(false);
+    pressure.reveal(false);
+    feedback.replaceChildren();
+    feedback.className = '';
+    announcement.textContent = 'Investigation restarted. All clues are closed. You can investigate the email again.';
+    sender.control.focus();
+  });
+  tools.append(readExampleButton('simulation-read',4),reset);
+  details.append(summary, safety, reference, email, inspection, announcement,
+    question, decisions, feedback, tools);
+  host.append(details);
+}
+
+function configureLessonQuiz(index) {
+  const content = $('quiz-content');
+  const region = $('quiz-region');
+  if (index !== 0) { region.replaceChildren(content); return; }
+  const details = document.createElement('details');
+  details.id = 'lesson-one-quiz';
+  details.className = 'lesson-quiz';
+  details.open = true;
+  const summary = document.createElement('summary');
+  summary.id = 'lesson-one-quiz-toggle';
+  const heading = document.createElement('h3');
+  heading.textContent = 'Lesson 1 Quiz — Check Your Knowledge';
+  summary.append(heading);
+  region.replaceChildren(details);
+  details.append(summary, content);
 }
 
 function showExplanation() {
@@ -910,7 +1439,7 @@ function showExplanation() {
 }
 lessons.forEach((lesson,i)=>{const card=document.createElement('article');card.className='card';const label=document.createElement('span');label.className='eyebrow';label.textContent=`LESSON ${i+1}`;const title=document.createElement('h3');title.textContent=lesson.title;const desc=document.createElement('p');desc.textContent=lesson.summary;const link=document.createElement('a');link.className='button';link.href=`#lesson-${i+1}`;link.textContent=`Start lesson ${i+1}`;const state=document.createElement('p');state.dataset.lessonProgress=String(i);state.className='lesson-progress';state.textContent='Not completed';card.append(label,title,desc,state,link);$('lesson-cards').append(card);});
 updateLessonCards();
-function openLesson(i){stopAudio();audioEnabled=false;$('explanation-tools').hidden=true;current=i;updateCompletionMessage();renderPractice(i);const l=lessons[i];$('lesson').hidden=false;$('lesson-title').textContent=l.title;$('lesson-number').textContent=`LESSON ${i+1} OF ${lessons.length}`;$('lesson-copy').replaceChildren();const intro=document.createElement('p');renderIntroduction(intro,l.intro,lessonTerms[i]);const heading=document.createElement('h3');heading.textContent='Warning signs';const list=document.createElement('ul');l.signs.forEach(s=>{const li=document.createElement('li');li.textContent=s;list.append(li);});const scenario=document.createElement('div');scenario.className='scenario';const h=document.createElement('h3');h.textContent='Scenario';const p=document.createElement('p');p.textContent=l.scenario;scenario.append(h,p);$('lesson-copy').append(intro,heading,list,scenario);$('question').textContent=l.question;$('answers').replaceChildren();l.answers.forEach((a,n)=>{const label=document.createElement('label');label.className='answer';const input=document.createElement('input');input.type='radio';input.name='answer';input.value=n;const span=document.createElement('span');span.textContent=a;label.append(input,span);$('answers').append(label);});$('feedback').hidden=true;$('next').hidden=true;$('audio-status').textContent=speech?'Select Play to hear the lesson. After you choose audio, checked answers will also be read aloud during this lesson.':'Read aloud is not available in this browser. All lesson text is shown below.';$('lesson').scrollIntoView();$('lesson-title').focus({preventScroll:true});}
+function openLesson(i){stopAudio();audioEnabled=false;$('explanation-tools').hidden=true;current=i;lessonAudio=null;configureLessonQuiz(i);updateCompletionMessage();renderPractice(i);renderPhishingSimulation(i);const l=lessons[i];$('lesson').hidden=false;$('lesson-title').textContent=l.title;$('lesson-number').textContent=`LESSON ${i+1} OF ${lessons.length}`;$('lesson-copy').replaceChildren();const intro=document.createElement('p');intro.id='lesson-introduction';renderIntroduction(intro,l.intro,lessonTerms[i]);const heading=document.createElement('h3');heading.textContent='Warning signs';const list=document.createElement('ul');l.signs.forEach(s=>{const li=document.createElement('li');li.textContent=s;list.append(li);});const scenario=document.createElement('div');scenario.className='scenario';const h=document.createElement('h3');h.textContent='Scenario';const p=document.createElement('p');p.textContent=l.scenario;scenario.append(h,p);const warnings=document.createElement('div');warnings.id='lesson-warning-signs';warnings.append(heading,list);$('lesson-copy').append(intro,warnings);if(i===0)$('lesson-copy').append(buildBankExamples());$('lesson-scenario').replaceChildren(scenario);$('question').textContent=l.question;$('answers').replaceChildren();l.answers.forEach((a,n)=>{const label=document.createElement('label');label.className='answer';const input=document.createElement('input');input.type='radio';input.name='answer';input.value=n;const span=document.createElement('span');span.textContent=a;label.append(input,span);$('answers').append(label);});$('feedback').hidden=true;$('next').hidden=true;resetLessonAudio(i);$('audio-status').textContent=speech&&i===0?'Select Play to listen to this lesson. You can pause or stop the narration at any time.':speech?'Select Play to hear the lesson. After you choose audio, checked answers will also be read aloud during this lesson.':'Read aloud is not available in this browser. All lesson text is shown below.';$('lesson').scrollIntoView();$('lesson-title').focus({preventScroll:true});}
 function route() {
   if (location.hash === '#main') {
     stopAudio();
@@ -968,11 +1497,8 @@ $('play').addEventListener('click', () => {
     return;
   }
 
-  readText(lessonSpeechSegments(
-    lessons[current],
-    current,
-    !$('feedback').hidden ? $('feedback').textContent : ''
-  ));
+  if (speechSession) return;
+  playLessonAudio();
 });
 
 $('read-explanation').addEventListener('click', () => {
@@ -983,8 +1509,16 @@ $('read-explanation').addEventListener('click', () => {
 $('pause').addEventListener('click', () => {
   if (speech && speechSession) speechSession.pause();
 });
-$('stop').addEventListener('click', stopAudio);
-if(!speech){['play','pause','stop'].forEach(id=>$(id).disabled=true);}window.addEventListener('pagehide',stopAudio);route();
+$('stop').addEventListener('click', stopLessonAudio);
+$('floating-toggle').addEventListener('click', () => {
+  if (speechSession && speechSession.phase !== 'paused') speechSession.pause();
+  else $('play').click();
+  syncFloatingPlayer();
+});
+$('floating-stop').addEventListener('click', stopLessonAudio);
+for(const id of ['read-from','floating-read-from'])$(id).addEventListener('change',()=>selectLessonAudioSection($(id).value));
+$('audio-player-focus').addEventListener('click', () => $('floating-toggle').focus());
+if(!speech){['play','pause','stop','read-from','floating-read-from'].forEach(id=>$(id).disabled=true);}window.addEventListener('pagehide',stopAudio);route();
 
 // Mobile navigation disclosure. Lesson and speech behavior above is unchanged.
 const menuToggle = $('menu-toggle');

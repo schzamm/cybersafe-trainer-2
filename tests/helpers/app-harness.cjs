@@ -30,7 +30,7 @@ function boot(options = {}) {
         if (name === 'href') this.href = value;
         if (name === 'hidden') this.hidden = true;
       },
-      getAttribute(name) { return name === 'href' ? this.href : this.attributes[name] ?? null; },
+      getAttribute(name) { return name === 'href' ? this.href ?? null : this.attributes[name] ?? null; },
       contains(child) { return this === child || this.children.some(c => c.contains(child)); },
       matches(selector) {
         if (selector === '*') return true;
@@ -46,7 +46,8 @@ function boot(options = {}) {
       querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
       closest(selector) { return this.matches(selector) ? this : this.parentElement?.closest(selector) || null; },
       focus() { focused = this; },
-      scrollIntoView() { this.scrollCalls = (this.scrollCalls || 0) + 1; }
+      click() { fire(this); },
+      scrollIntoView(options) { this.scrollCalls = (this.scrollCalls || 0) + 1; this.lastScrollOptions = options; }
     };
     return node;
   }
@@ -107,7 +108,7 @@ function boot(options = {}) {
     addEventListener(type, fn) { (events.media ||= []).push(fn); } };
   const window = {
     addEventListener(type, fn) { (events[type] ||= []).push(fn); },
-    matchMedia() { return media; }
+    matchMedia(query) { return query === '(prefers-reduced-motion: reduce)' ? { matches: options.reducedMotion === true } : media; }
   };
   if (!options.noSpeech) {
     window.speechSynthesis = synth;

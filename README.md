@@ -16,6 +16,10 @@ For local preview, open `index.html` using your browser's file-opening option or
 
 Choose any lesson. Each includes an introduction, warning signs, a scenario, and a main multiple-choice question. Only a correct answer to that main question marks the lesson complete. There are unlimited retries.
 
+Immediately after Lesson 1’s warning signs, **Let's Check Two Examples** presents a simulated sign-in email and bank fraud text about a $786.42 purchase. The messages are safe to examine: use their separate **Investigate** buttons to reveal explanations. No link opens and no reply is sent. Each distinct explanation appears once; YES and NO share an explanation and open/closed state. **Close** appears for one open explanation and **Close all** for multiple explanations; these controls disappear when none are open. A separate visually hidden live region announces changes for screen-reader users. Closing explanations does not change progress. Fictional names and reserved `.example` addresses are used.
+
+**Lesson 1 Quiz — Check Your Knowledge** starts expanded. Its heading is a native disclosure control: Enter or Space collapses and reopens the quiz, including its feedback, without clearing selected answers or changing completion. Read Aloud does not open or close the quiz. Lessons 2–5 keep their existing quiz presentation.
+
 Each lesson also includes two optional activities:
 
 - **Practice spotting the warning signs:** select the details that deserve further checking, then review the explanations.
@@ -23,11 +27,15 @@ Each lesson also includes two optional activities:
 
 Optional activities never affect completion or block navigation. **Try again** clears the practice choices, and **Skip this practice** closes the activity. The technical-support lesson also includes expandable Windows, Android, and iPhone instructions for closing an unresponsive browser.
 
+Lesson 1 also offers **Scam Investigation: Is This Email Real?**, an optional fictional inbox. Use **Investigate the Sender**, **Investigate the Link**, and **Investigate the Warning Signs** to explore the clues before choosing whether to trust the message or report it as suspicious. Both choices explain how the clues fit together without judgment. The verification button only reveals text: it never opens a website or sends anything. All example domains end in `.example`; there are no login fields or personal-data requests. **Restart investigation** closes the clues and clears the investigation feedback without changing lesson completion. Its message can be narrated using its optional Read Example button. Investigation decisions are not saved or transmitted.
+
 Completed cards show **✓ Lesson completed** and a numbered **Review lesson** link. The lesson displays **Lesson completed!** and explains that you can revisit it to review or practice again. The checkmark is decorative and hidden from screen readers; the written completion status remains available.
 
 ## Narration and accessibility
 
-**Play**, **Pause**, and **Stop** control the current reading. Play resumes a paused reading; after Stop, Play starts the main lesson from the beginning. **Read practice aloud**, **Read explanation aloud**, and the browser-help reading button use the same controls. Starting a different reading, changing lessons, closing a practice, or submitting another answer stops the previous reading.
+**Play**, **Pause**, and **Stop** control the current reading. Play resumes a paused reading. Across all five lessons, Stop cancels speech, clears the highlight, and hides the player while retaining the selected section; Play restarts that section. At an exploration pause the primary button says **Continue lesson**. Stop leaves the current section selected without automatically restarting speech. Repeated Play clicks during playback do not start competing readings. **Read practice aloud**, **Read explanation aloud**, and the browser-help reading button also use the primary controls. Starting a different reading, changing lessons, closing a practice, or submitting another answer stops the previous reading.
+
+The floating Read Aloud player is available in all five lessons after an explicit audio choice, including practice or explanation reading. It stays available while scrolling and during pauses. A reserved bottom row keeps it outside the page’s scrollable area; its height adjusts to text size. Both the original controls and the floating player offer a labeled **Read from** selector using the actual lesson headings. Choose a section, then press Play to hear it. Changing the selection cancels any current or paused reading without starting another; both selectors stay synchronized. Stop hides the player but retains the selection for Play. The **Floating player** button moves keyboard focus to the player. Lesson changes and reloads reset the audio selection; it is not saved or transmitted.
 
 Choosing audio enables automatic reading of checked-answer feedback for the current lesson. Without that choice, feedback stays quiet. Changing lessons resets the audio preference. Stop clears playback and status without removing the preference for subsequent answers. No-answer reminders do not automatically play.
 
@@ -40,6 +48,8 @@ Separate observations from user testing:
 - **Firefox on Windows 11:** the tested installation returned no speech voices and produced no sound in a direct speech-synthesis test. This describes that installation, not all Firefox versions or configurations. Lessons and activities remain readable and usable without narration.
 
 Readings include a 400ms pause after lesson titles and activity headings, plus a 200ms pause after selected first-defined terms. Pausing during a gap preserves its remaining duration.
+
+Lesson 1 remains one continuous, scrollable page: introduction and Warning Signs, scam email, scam text, Scam Investigation, original scenario, and quiz. All content is available without narration or Continue buttons. Optional teaching narration follows this order, highlights the active section with a background and border, and scrolls it into view once without moving keyboard focus. Reduced-motion preferences disable animated scrolling. At each interactive exercise, narration introduces what to examine and pauses for exploration. **Read Example** reads only the simulated message; it never opens hidden clues or reads their explanations. It uses the same primary Pause/Stop controls and returns to exploration when finished. **Continue lesson** advances teaching narration whenever the visitor is ready; no answer or completion is required. Selected clues can be read only after an audio choice, without losing the teaching section bookmark. Narration never changes quiz visibility, navigation, or completion. If the quiz is collapsed, its visible disclosure heading is highlighted rather than opening it. Lesson audio position is kept only in memory and resets when changing lessons or reloading. Lessons 2–5 retain their teaching text in section-based readings.
 
 Use **A+** and **A−** to adjust text from 100% to 150%. Browser zoom also works. Text size and audio preferences are not saved. Controls have visible focus outlines and large touch targets.
 
@@ -77,6 +87,7 @@ Scam help contains optional links to official FTC, IdentityTheft.gov, and Medica
 - `mobile.css`: phone layout and navigation overrides.
 - `check-mobile.cjs`: a local menu-behavior simulation using only built-in Node.js modules.
 - `tests/regression.test.cjs` and `tests/helpers/app-harness.cjs`: repeatable application regression tests using only built-in Node.js modules and a deterministic DOM/speech/storage model.
+- `tests/simulation.test.cjs`: fictional-email interaction, safe controls, feedback, reset, completion independence, and narration regression tests.
 - `tests/browser-check.cjs`: optional real-browser performance, keyboard, layout, and accessibility-tree checks using an already installed Playwright module and Chrome/Edge executable.
 - `tests/README.md`: test commands, browser prerequisites, measurement methodology, and limitations.
 - `README.md`: these instructions.
@@ -90,7 +101,7 @@ If Node.js is already installed, these saved checks can be run from the project 
 node --check app.js
 node --check check-mobile.cjs
 node check-mobile.cjs
-node --test tests/regression.test.cjs
+node --test tests/regression.test.cjs tests/simulation.test.cjs tests/bank-examples.test.cjs tests/lesson-flow.test.cjs
 ```
 
 The saved menu simulation checks 320, 390, 430, and 1200 pixel widths, open/close behavior, Escape, focus return, and desktop/mobile transitions. It does not render CSS.
@@ -150,3 +161,5 @@ The deployment configuration above is maintainer-reported; the local source file
 © 2026 CyberSafe Trainer 2. All rights reserved.
 
 Created by schzamm with assistance from OpenAI's ChatGPT and Codex.
+
+Optional practices appear in **Read from** but are not automatically included in the main lesson reading. Choosing one for audio does not open its disclosure or clear answers. **Read practice aloud** selects that activity in the shared player. **Skip this practice** selects the main question for the next Play; it does not start narration or affect completion, and an already active player remains available. If the quiz or an activity is collapsed, narration highlights a visible heading instead of opening it.

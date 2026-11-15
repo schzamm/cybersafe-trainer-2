@@ -28,7 +28,7 @@ for (let index = 0; index < 5; index++) {
     a.run('openLesson(' + index + ')');
     assert.equal(a.get('lesson-title').textContent, lesson.title);
     assert.equal(a.get('question').textContent, lesson.question);
-    assert.ok(a.get('lesson-copy').textContent.includes(lesson.scenario));
+    assert.ok(a.get('lesson-scenario').textContent.includes(lesson.scenario));
     a.fire(a.get('quiz'), 'submit');
     assert.match(a.get('feedback').textContent, /^Select an answer/);
     assert.equal(a.run('completed.size'), 0);
@@ -244,16 +244,18 @@ test('Stop and navigation cancel pending voice retries and stale callbacks', () 
     assert.equal(a.spoken.length, 0); assert.equal(a.timers.size, 0);
   }
 });
-test('main narration reconstructs all existing wording with 400ms title and 200ms term gaps', () => {
+test('Lesson 1 teaching retains title and term pauses before exploration', () => {
   const a = boot(); a.run('openLesson(0)'); a.fire(a.get('play'));
   assert.equal(a.active().text, a.run('lessons[0].title'));
   a.end(); a.advance(399); assert.equal(a.spoken.length, 1);
   a.advance(1); assert.equal(a.spoken.length, 2);
   a.end(); a.advance(199); assert.equal(a.spoken.length, 2);
   a.advance(1); assert.equal(a.spoken.length, 3);
-  const expected = a.run("lessonSpeechSegments(lessons[0],0,'').map(s=>s.text).join('')");
-  assert.equal(a.spoken.map(s => s.text).join(''), expected);
-  a.end(); assert.equal(a.run('speechSession'), null);
+  for(let i=0;i<150 && a.run('speechSession !== null');i++){if(a.active())a.end();a.advance(500);}
+  assert.equal(a.run('lessonAudio.index'),2);
+  assert.equal(a.run('lessonAudio.waiting'),true);
+  assert.equal(a.run('speechSession'),null);
+  assert.equal(a.focused(),a.get('lesson-title'));
 });
 for (const kind of ['warning', 'followup']) {
   test(kind + ': current heading and 400ms gap, Pause/Play preserve remaining time', () => {
