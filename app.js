@@ -1134,6 +1134,27 @@ function readExampleButton(id,index) {
 function readBankDetail(text, target = null) {
   if (audioEnabled && current === 0) readLessonOneExtra([{text,pauseAfterMs:0}],target);
 }
+function investigateWithoutAudio() {
+  audioEnabled=false;
+  stopLessonAudio();
+}
+function bringExplanationIntoView(detail) {
+  if (detail.hidden || typeof detail.getBoundingClientRect !== 'function') return;
+  const rect=detail.getBoundingClientRect();
+  let top=12, bottom=window.innerHeight-12;
+  const frame=$('page-content');
+  if(document.documentElement.getAttribute('data-audio-player')==='open'){
+    const visible=frame.getBoundingClientRect();
+    top=Math.max(top,visible.top+12);bottom=Math.min(bottom,visible.bottom-12);
+  }
+  const available=bottom-top;
+  if(available<=0 || (rect.top>=top && rect.bottom<=bottom))return;
+  const tall=rect.height>available;
+  // A long explanation only needs its beginning comfortably visible.
+  if(tall && rect.top>=top && bottom-rect.top>=Math.min(180,available/2))return;
+  detail.scrollIntoView({block:tall?'start':'nearest',inline:'nearest',
+    behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+}
 function dismissBankDetail() { stopAudio(true); }
 
 function buildBankExamples() {
@@ -1168,7 +1189,7 @@ function buildBankExamples() {
     const controls = [];
     const explanations = new Map();
     function updateClues() {
-      const count = [...clues.children].filter(detail => !detail.hidden).length;
+      const count = [...explanations.values()].filter(detail => !detail.hidden).length;
       controls.forEach(control => {
         const detail = $(control.getAttribute('aria-controls'));
         control.setAttribute('aria-expanded', String(!detail.hidden));
@@ -1192,23 +1213,27 @@ function buildBankExamples() {
       button.setAttribute('aria-expanded', 'false');
       button.setAttribute('aria-controls', button.id + '-detail');
       let detail = explanations.get(explanation);
+      const fresh = !detail;
       if (!detail) {
         detail = node('p', explanation, 'message-clue');
         detail.id = button.id + '-detail';
         detail.hidden = true;
         explanations.set(explanation, detail);
-        clues.append(detail);
       }
       button.setAttribute('aria-controls', detail.id);
       button.setAttribute('aria-describedby', introduction.id);
       button.addEventListener('click', () => {
+        investigateWithoutAudio();
         detail.hidden = !detail.hidden;
         updateClues();
-        if (!detail.hidden && audioEnabled) readBankDetail(explanation,detail.id);
-        else if (detail.hidden) dismissBankDetail();
+        if (!detail.hidden) bringExplanationIntoView(detail);
       });
       controls.push(button);
       group.append(evidence,button);
+      if (fresh) {
+        if (key.startsWith('reply-')) clues.append(detail);
+        else group.append(detail);
+      }
       return group;
     }
     const reset = node('button', 'Close');
@@ -1220,7 +1245,7 @@ function buildBankExamples() {
       stopAudio(true);
       dismissBankDetail();
       controls.forEach(button => button.setAttribute('aria-expanded', 'false'));
-      [...clues.children].forEach(item => { item.hidden = true; });
+      [...explanations.values()].forEach(item => { item.hidden = true; });
       updateClues();
       controls[0].focus();
     });
@@ -1231,9 +1256,9 @@ function buildBankExamples() {
       : 'Use the Investigate buttons to examine this text and its reply request. No reply is sent.', 'message-instructions');
     introduction.id = id + '-instructions';
     status.textContent = 'No clues open.';
-    wrapper.append(label, introduction, mock, clues, status, announcement, tools);
+    wrapper.append(label, introduction, mock, status, announcement, tools);
     section.append(wrapper);
-    return { mock, clue };
+    return { mock, clue, sharedClues: clues };
   }
   const email = example('bank-email', 'Account sign-in email', 'opened-email');
   email.mock.append(node('p', 'Inbox  /  Open message', 'message-chrome'),
@@ -1264,7 +1289,7 @@ function buildBankExamples() {
   const replies = node('div', '', 'text-replies');
   for (const answer of ['YES', 'NO']) replies.append(sms.clue('reply-' + answer.toLowerCase(), answer,
     'No reply was sent. Either response can engage a scammer. Leave this unexpected conversation and check with your bank through your usual app or the number on your card.'));
-  sms.mock.append(replies);
+  sms.mock.append(replies,sms.sharedClues);
   return section;
 }
 
@@ -1331,9 +1356,9 @@ function renderPhishingSimulation(index) {
       control.setAttribute('aria-expanded', String(open));
     }
     control.addEventListener('click', () => {
+      investigateWithoutAudio();
       reveal(region.hidden);
-      if (!region.hidden && audioEnabled) readBankDetail(region.textContent,region.id);
-      else if (region.hidden) dismissBankDetail();
+      if (!region.hidden) bringExplanationIntoView(region);
     });
     inspection.append(control, region);
     return { control, region, reveal };
@@ -1358,9 +1383,10 @@ function renderPhishingSimulation(index) {
   verify.setAttribute('aria-controls', 'simulation-destination-detail');
   verify.setAttribute('aria-expanded', 'false');
   verify.addEventListener('click', () => {
+    investigateWithoutAudio();
     revealDestination(true);
     announcement.textContent = 'A clue to investigate: the destination is shown below the email. No website opened.';
-    if (audioEnabled) readBankDetail(destination.region.textContent,destination.region.id);
+    bringExplanationIntoView(destination.region);
   });
 
   const question = textNode('p', 'What do the clues tell you? Investigate the sender, link and warning signs, then decide what you would do with this message. You can revisit any example.');

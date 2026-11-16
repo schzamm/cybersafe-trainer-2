@@ -566,10 +566,36 @@ async function simulationBrowserChecks(base) {
         assert.equal(await page.locator('#'+id).isVisible(),false);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       await page.locator('#bank-text-request').focus();await page.keyboard.press('Enter');
-      assert.match(await page.evaluate(()=>window.__guideAudio.active.text),/Scammers use YES/);
-      assert.equal(await page.locator('#bank-text-request-detail').getAttribute('data-narrating'),'true');
+      assert.equal(await page.evaluate(()=>window.__guideAudio.active),null);
+      assert.equal(await page.evaluate(()=>audioEnabled),false);
+      assert.equal(await page.locator('#bank-text-request-detail').isVisible(),true);
+      assert.equal(await page.locator('#floating-player').isVisible(),false);
       await page.locator('#stop').click();
       assert.equal(await page.locator('[data-narrating="true"]').count(),0);
+      assert.deepEqual(pageErrors,[]);
+    });
+    await check('silent investigation cancels current speech and never restarts it on keyboard activation or stale callbacks',async()=>{
+      for(const control of ['bank-email-sender','bank-text-request','simulation-sender','simulation-verify']){
+        await page.locator('#lesson-cards a').first().click();
+        await page.locator('#read-from').selectOption({label:'Account sign-in email'});
+        await page.locator('#play').click();
+        await page.evaluate(()=>window.__silentStale=window.__guideAudio.active);
+        const selected=await page.locator('#read-from').inputValue();
+        const count=await page.evaluate(()=>window.__guideAudio.readings.length);
+        await page.locator('#'+control).focus();await page.keyboard.press('Enter');
+        assert.equal(await page.evaluate(()=>document.activeElement.id),control);
+        assert.equal(await page.evaluate(()=>window.__guideAudio.active),null);
+        assert.equal(await page.evaluate(()=>audioEnabled),false);
+        assert.equal(await page.locator('#floating-player').isVisible(),false);
+        assert.equal(await page.locator('#read-from').inputValue(),selected);
+        assert.equal(await page.locator('#floating-read-from').inputValue(),selected);
+        const detail=await page.locator('#'+control).getAttribute('aria-controls');
+        assert.equal(await page.locator('#'+detail).isVisible(),true);
+        await page.evaluate(()=>window.__silentStale.onend());await page.waitForTimeout(500);
+        assert.equal(await page.evaluate(()=>window.__guideAudio.readings.length),count);
+        await page.locator('#bank-text-read').click();assert.ok(await page.evaluate(()=>window.__guideAudio.active));
+        await page.locator('#stop').click();
+      }
       assert.deepEqual(pageErrors,[]);
     });
   } finally { await context.close(); }
@@ -703,6 +729,52 @@ async function floatingPlayerChecks(base) {
     const bounds=await page.evaluate(()=>({page:document.getElementById('page-content').getBoundingClientRect().bottom,player:document.getElementById('floating-player').getBoundingClientRect().top}));
     assert.ok(bounds.page<=bounds.player+1);
     await page.locator('#floating-stop').click();
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+   });
+   await check('explanation visibility '+viewport.width+'×'+viewport.height+': inline placement, minimal scrolling, silent keyboard use at 100%/150%',async()=>{
+    await page.locator('#lesson-cards a').first().click();
+    await page.waitForFunction(()=>lessonAudio && lessonAudio.lesson===0);
+    await page.evaluate(()=>{
+      window.__explanationScrolls=[];
+      const original=Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView=function(options){
+        if(this.classList.contains('message-clue')||this.classList.contains('simulation-clue'))window.__explanationScrolls.push({id:this.id,block:options.block,behavior:options.behavior});
+        return original.call(this,options);
+      };
+    });
+    for(let i=0;i<5;i++)await page.locator('#smaller').click();
+    for(const size of [100,150]){
+      if(size===150)for(let i=0;i<5;i++)await page.locator('#larger').click();
+      for(const id of ['bank-email-sender','bank-text-request','simulation-sender']){
+        const button=page.locator('#'+id),detailId=await button.getAttribute('aria-controls');
+        const detail=page.locator('#'+detailId);
+        await button.focus();
+        await page.evaluate(id=>{
+          const button=document.getElementById(id),rect=button.getBoundingClientRect();
+          window.scrollTo({top:window.scrollY+rect.bottom-(innerHeight-24),behavior:'instant'});
+        },id);
+        const count=await page.evaluate(()=>window.__floatingAudio.readings.length);
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(id=>{
+          const r=document.getElementById(id).getBoundingClientRect();
+          return r.height>innerHeight-24 ? r.top>=-1 && r.top<innerHeight/2 : r.top>=-1 && r.bottom<=innerHeight+1;
+        },detailId);
+        assert.equal(await detail.isVisible(),true);
+        assert.equal(await page.evaluate(()=>document.activeElement.id),id);
+        assert.equal(await page.evaluate(()=>window.__floatingAudio.readings.length),count);
+        assert.equal(await page.evaluate(()=>audioEnabled),false);
+        const requests=await page.evaluate(id=>window.__explanationScrolls.filter(item=>item.id===id),detailId);
+        assert.ok(requests.length>0,'Expected a necessary scroll for '+id);
+        assert.equal(requests.at(-1).behavior,'instant');
+        if(id!=='simulation-sender')assert.equal(await button.evaluate(e=>e.nextElementSibling.id),detailId);
+        if(size===150 && id==='bank-text-request')await page.screenshot({path:path.join(artifacts,'explanation-'+viewport.width+'-'+viewport.height+'-150.png')});
+        const scrolls=await page.evaluate(()=>window.__explanationScrolls.length);
+        await page.keyboard.press('Enter');
+        assert.equal(await detail.isVisible(),false);
+        assert.equal(await page.evaluate(()=>window.__explanationScrolls.length),scrolls);
+      }
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
    });
   } finally {await context.close();}

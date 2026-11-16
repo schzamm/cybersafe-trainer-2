@@ -101,13 +101,13 @@ test('heading gaps pause and resume without navigation or visibility changes',()
  a.advance(5000);a.fire(a.get('play'));a.advance(299);assert.equal(a.spoken.length,count);a.advance(1);assert.equal(a.spoken.length,count+1);
  assert.equal(a.get('simulation-content').hidden,false);
 });
-test('selected clues alone narrate explanations; closing or resetting cancels reading',()=>{
- const a=open();a.fire(a.get('bank-email-sender'));assert.equal(a.spoken.length,0);
- a.fire(a.get('play'));a.fire(a.get('bank-text-request'));assert.match(a.active().text,/Scammers use YES\/NO/);
- const clue=a.active();a.fire(a.get('pause'));a.fire(a.get('play'));assert.equal(a.active(),clue);
- a.fire(a.get('bank-text-request'));assert.equal(a.active(),null);
- a.fire(a.get('simulation-sender'));assert.match(a.active().text,/Compare the part after @/);
+test('Investigate cancels audio and reveals explanations silently until an explicit audio choice',()=>{
+ const a=open();a.fire(a.get('play'));const count=a.spoken.length;
+ a.fire(a.get('bank-text-request'));assert.equal(a.active(),null);assert.equal(a.spoken.length,count);
+ assert.equal(a.get('bank-text-request-detail').hidden,false);assert.equal(a.run('audioEnabled'),false);
+ a.fire(a.get('simulation-sender'));assert.equal(a.active(),null);
  a.fire(a.get('simulation-reset'));assert.equal(a.active(),null);assert.equal(a.get('simulation-content').hidden,false);
+ a.fire(a.get('bank-text-read'));assert.ok(a.active());assert.equal(a.run('audioEnabled'),true);
 });
 test('delayed voice loading and stale callbacks never change layout or restart after Stop/navigation',()=>{
  const a=open({voices:[]});a.fire(a.get('play'));a.fire(a.get('pause'));
@@ -157,6 +157,8 @@ test('floating player appears only after audio activation and remains during pau
  a.fire(a.get('floating-toggle'));drain(a);
  assert.equal(a.get('floating-toggle').textContent,'Continue lesson');
  a.fire(a.get('bank-email-sender'));a.fire(a.get('bank-email-sender'));
+ assert.equal(a.get('floating-player').hidden,true);
+ a.fire(a.get('bank-email-read'));drain(a);
  assert.equal(a.get('floating-player').hidden,false);
  a.fire(a.get('floating-toggle'));assert.equal(a.run('lessonAudio.index'),3);
  a.get('floating-stop').focus();a.fire(a.get('floating-stop'));
@@ -239,4 +241,35 @@ test('collapsed optional activities stay closed when selected; only a visible he
  a.get('read-from').value=String(index);a.fire(a.get('read-from'),'change');a.fire(a.get('play'));
  assert.equal(a.get('followup-practice').querySelector('details').open,false);
  assert.equal(a.get('followup-practice-heading').getAttribute('data-narrating'),'true');
+});
+
+for(const control of ['bank-email-sender','bank-text-request','simulation-sender','simulation-verify']){
+ for(const state of ['playing','paused','loading','stopped']){
+  test(control+': silent investigation stops '+state+' speech, keeps the section and cannot restart from stale events',()=>{
+   const a=open(state==='loading'?{voices:[]}:undefined);
+   a.get('read-from').value='2';a.fire(a.get('read-from'),'change');a.fire(a.get('play'));
+   const stale=a.active();
+   if(state==='paused')a.fire(a.get('pause'));
+   if(state==='stopped')a.fire(a.get('stop'));
+   const selected=a.get('read-from').value,count=a.spoken.length;
+   a.fire(a.get(control));assert.equal(a.active(),null);assert.equal(a.run('audioEnabled'),false);
+   assert.equal(a.get('floating-player').hidden,true);
+   assert.equal(a.get('read-from').value,selected);assert.equal(a.get('floating-read-from').value,selected);
+   const detail=a.get(a.get(control).getAttribute('aria-controls'));assert.equal(detail.hidden,false);
+   if(stale)stale.onend();
+   a.setVoices([{lang:'en-US',localService:true}]);a.voicesChanged();a.advance(10000);
+   assert.equal(a.spoken.length,count);assert.equal(a.active(),null);assert.equal(a.timers.size,0);
+   assert.equal(a.writes.length,0);assert.equal(a.run('completed.size'),0);
+   a.fire(a.get('play'));assert.ok(a.active());assert.equal(a.get('floating-player').hidden,false);
+  });
+ }
+}
+test('all non-audio clue controls remain silent; quiz feedback stays quiet until audio is explicitly enabled again',()=>{
+ const a=open();a.fire(a.get('play'));a.fire(a.get('stop'));const count=a.spoken.length;
+ for(const id of ['bank-email-sender','bank-email-urgency','bank-email-review','bank-text-sender','bank-text-purchase','bank-text-request','bank-text-reply-yes','bank-text-reply-no','simulation-sender','simulation-destination','simulation-pressure','simulation-verify'])a.fire(a.get(id));
+ assert.equal(a.spoken.length,count);assert.equal(a.run('audioEnabled'),false);
+ a.get('answers').querySelectorAll('input').forEach((input,i)=>input.checked=i===1);a.fire(a.get('quiz'),'submit');
+ assert.equal(a.active(),null);assert.equal(a.get('feedback').hidden,false);assert.equal(a.run('completed.size'),1);
+ a.fire(a.get('play'));a.fire(a.get('quiz'),'submit');
+ assert.ok(a.active());assert.equal(a.active().text,a.get('feedback').textContent);
 });

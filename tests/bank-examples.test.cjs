@@ -58,6 +58,42 @@ test('YES and NO share one explanation and keep both control states synchronized
  assert.equal(a.get('bank-text-reset').disabled,true);
 });
 
+test('explanations sit next to their clue; YES and NO retain one full-width shared explanation',()=>{
+ const a=boot();a.run('openLesson(0)');
+ for(const id of ['bank-email-sender','bank-email-review','bank-text-request']){
+  const button=a.get(id),detail=a.get(button.getAttribute('aria-controls'));
+  assert.equal(detail.parentElement===button.parentElement,true);
+  assert.equal(button.parentElement.children.indexOf(detail),button.parentElement.children.indexOf(button)+1);
+  assert.equal(a.get('bank-examples').querySelectorAll('#'+detail.id).length,1);
+ }
+ const yes=a.get('bank-text-reply-yes'),no=a.get('bank-text-reply-no');
+ const detail=a.get(yes.getAttribute('aria-controls'));
+ assert.equal(yes.getAttribute('aria-controls'),no.getAttribute('aria-controls'));
+ const row=yes.parentElement.parentElement;
+ assert.equal(detail.parentElement.parentElement===row.parentElement,true);
+ assert.equal(row.parentElement.children.indexOf(detail.parentElement),row.parentElement.children.indexOf(row)+1);
+});
+for(const reducedMotion of [false,true]){
+ for(const scenario of [
+  {name:'already visible',top:100,bottom:260,height:160,scroll:false},
+  {name:'partly below viewport',top:550,bottom:710,height:160,scroll:true,block:'nearest'},
+  {name:'above viewport',top:-100,bottom:60,height:160,scroll:true,block:'nearest'},
+  {name:'long with only first line visible',top:570,bottom:1470,height:900,scroll:true,block:'start'},
+  {name:'long with a comfortable beginning visible',top:100,bottom:1000,height:900,scroll:false}
+ ]){
+  test(scenario.name+', reduced motion='+reducedMotion+': explanation visibility uses only necessary scrolling and keeps focus/audio unchanged',()=>{
+   const a=boot({reducedMotion});a.run('openLesson(0)');a.window.innerHeight=600;
+   const button=a.get('bank-email-sender'),detail=a.get(button.getAttribute('aria-controls'));
+   detail.getBoundingClientRect=()=>({...scenario});
+   button.focus();a.fire(button);
+   assert.equal(detail.hidden,false);assert.equal(a.focused()===button,true);
+   assert.equal(detail.scrollCalls||0,scenario.scroll?1:0);
+   if(scenario.scroll){assert.equal(detail.lastScrollOptions.block,scenario.block);assert.equal(detail.lastScrollOptions.behavior,reducedMotion?'instant':'smooth');}
+   const count=detail.scrollCalls||0;a.fire(button);
+   assert.equal(detail.scrollCalls||0,count);assert.equal(a.spoken.length,0);assert.equal(a.writes.length,0);
+  });
+ }
+}
 test('single and multiple clue controls use Close and Close all without changing progress',()=>{
  const a=boot();a.run('openLesson(0)');
  a.fire(a.get('bank-email-sender'));assert.equal(a.get('bank-email-reset').textContent,'Close');

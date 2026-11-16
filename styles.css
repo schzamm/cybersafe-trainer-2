@@ -78,6 +78,10 @@ footer p { max-width: 70ch; margin: .75rem auto; overflow-wrap: anywhere; }
 .text-replies { display: flex; flex-wrap: wrap; gap: .6rem; }
 .text-replies .message-hotspot { flex: 1 1 4rem; text-align: center; }
 .message-clue { border-left: 4px solid var(--blue); padding: .6rem; background: #f0f5fa; }
+.message-detail > .message-clue, .message-clues > .message-clue { margin: .45rem 0; }
+.message-clue, .simulation-clue { scroll-margin-block: .65rem; }
+.phone-message .message-clue { margin-inline: -.6rem; padding: .4rem; }
+.phone-message .text-bubble .message-clue { margin-inline: -1.2rem; }
 .bank-examples p, .bank-examples h4 { overflow-wrap: anywhere; }
 .simulation-email { border: 1px solid var(--line); border-radius: 10px; padding: .75rem; background: #f0f5fa; margin: 1rem 0; }
 .simulation-email h3 { margin: .5rem 0; }
