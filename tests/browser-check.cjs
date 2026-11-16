@@ -601,6 +601,17 @@ async function simulationBrowserChecks(base) {
   } finally { await context.close(); }
 }
 
+// Runs in the page. Account for CSS scroll spacing when deciding whether a
+// complete explanation fits; longer notes need a clearly readable beginning.
+function explanationIsReadable(id) {
+  const element=document.getElementById(id),rect=element.getBoundingClientRect();
+  const inset=(parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)||0)+
+    (parseFloat(getComputedStyle(element).scrollMarginTop)||0);
+  const available=innerHeight-Math.max(12,inset)-12;
+  return rect.height>available
+    ? rect.top>=-1 && innerHeight-12-rect.top>=Math.min(180,available/2)
+    : rect.top>=-1 && rect.bottom<=innerHeight+1;
+}
 async function floatingPlayerChecks(base) {
  for(const viewport of [{width:390,height:844},{width:412,height:922},{width:320,height:568},{width:1280,height:900}]) {
   const context=await browser.newContext({viewport,isMobile:viewport.width<600,hasTouch:viewport.width<600});
@@ -755,10 +766,7 @@ async function floatingPlayerChecks(base) {
         },id);
         const count=await page.evaluate(()=>window.__floatingAudio.readings.length);
         await page.keyboard.press('Enter');
-        await page.waitForFunction(id=>{
-          const r=document.getElementById(id).getBoundingClientRect();
-          return r.height>innerHeight-24 ? r.top>=-1 && r.top<innerHeight/2 : r.top>=-1 && r.bottom<=innerHeight+1;
-        },detailId);
+        await page.waitForFunction(explanationIsReadable,detailId);
         assert.equal(await detail.isVisible(),true);
         assert.equal(await page.evaluate(()=>document.activeElement.id),id);
         assert.equal(await page.evaluate(()=>window.__floatingAudio.readings.length),count);
@@ -774,6 +782,29 @@ async function floatingPlayerChecks(base) {
         assert.equal(await page.evaluate(()=>window.__explanationScrolls.length),scrolls);
       }
     }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+   });
+   await check('shared reply and investigation explanations '+viewport.width+'×'+viewport.height+': readable beginning after stopping active narration at 150%',async()=>{
+    await page.locator('#lesson-cards a').first().click();
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).fontSize),'30px');
+    for(const id of ['bank-text-reply-yes','bank-text-reply-no','simulation-sender','simulation-destination','simulation-pressure','simulation-verify']){
+      const button=page.locator('#'+id),detailId=await button.getAttribute('aria-controls');
+      const detail=page.locator('#'+detailId);
+      if(await detail.isVisible())await button.click();
+      await page.locator('#play').click();
+      const count=await page.evaluate(()=>window.__floatingAudio.readings.length);
+      await button.focus();await page.keyboard.press('Enter');
+      await page.waitForFunction(explanationIsReadable,detailId);
+      assert.equal(await detail.isVisible(),true);
+      assert.equal(await page.evaluate(()=>document.activeElement.id),id);
+      assert.equal(await page.evaluate(()=>window.__floatingAudio.readings.length),count);
+      assert.equal(await page.evaluate(()=>window.__floatingAudio.active),null);
+      assert.equal(await page.evaluate(()=>audioEnabled),false);
+      assert.equal(await page.locator('#floating-player').isVisible(),false);
+      if(id.includes('reply-'))assert.equal(await detail.evaluate(e=>e.parentElement.previousElementSibling.classList.contains('text-replies')),true);
+    }
+    assert.equal(await page.locator('#bank-text-reply-yes').getAttribute('aria-controls'),await page.locator('#bank-text-reply-no').getAttribute('aria-controls'));
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
    });

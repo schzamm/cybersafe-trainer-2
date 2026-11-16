@@ -79,6 +79,8 @@ for(const reducedMotion of [false,true]){
   {name:'partly below viewport',top:550,bottom:710,height:160,scroll:true,block:'nearest'},
   {name:'above viewport',top:-100,bottom:60,height:160,scroll:true,block:'nearest'},
   {name:'long with only first line visible',top:570,bottom:1470,height:900,scroll:true,block:'start'},
+  {name:'long with exactly 180px of its beginning visible',top:408,bottom:1308,height:900,scroll:false},
+  {name:'long with less than 180px of its beginning visible',top:409,bottom:1309,height:900,scroll:true,block:'start'},
   {name:'long with a comfortable beginning visible',top:100,bottom:1000,height:900,scroll:false}
  ]){
   test(scenario.name+', reduced motion='+reducedMotion+': explanation visibility uses only necessary scrolling and keeps focus/audio unchanged',()=>{
