@@ -458,6 +458,8 @@ async function simulationBrowserChecks(base) {
         await page.locator('#bank-'+kind+'-sender').focus();await page.keyboard.press('Enter');
         assert.equal(await page.locator('#bank-'+kind+'-reset').isVisible(),true);
         assert.equal(await page.locator('#bank-'+kind+'-reset').textContent(),'Close');
+        assert.equal(await page.locator('#bank-'+kind+'-status').isVisible(),false);
+        assert.match(await page.locator('#bank-'+kind+'-announcement').textContent(),/1 clue open/);
         await page.locator('#bank-'+kind+'-reset').focus();await page.keyboard.press('Space');
         assert.equal(await page.locator('#bank-'+kind+'-reset').isVisible(),false);
         assert.equal(await page.locator('#bank-'+kind+'-status').isVisible(),false);
@@ -805,6 +807,34 @@ async function floatingPlayerChecks(base) {
       if(id.includes('reply-'))assert.equal(await detail.evaluate(e=>e.parentElement.previousElementSibling.classList.contains('text-replies')),true);
     }
     assert.equal(await page.locator('#bank-text-reply-yes').getAttribute('aria-controls'),await page.locator('#bank-text-reply-no').getAttribute('aria-controls'));
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+   });
+   await check('reply buttons '+viewport.width+'×'+viewport.height+': readable single-line labels, keyboard access and hidden counts at 150%',async()=>{
+    await page.locator('#lesson-cards a').first().click();
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).fontSize),'30px');
+    const boxes=await page.locator('.text-replies .message-hotspot').evaluateAll(buttons=>buttons.map(e=>{
+      const r=e.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(e);
+      return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,lines:range.getClientRects().length,overflow:e.scrollWidth>e.clientWidth+1};
+    }));
+    for(const box of boxes){
+      assert.equal(box.lines,1);assert.equal(box.overflow,false);
+      assert.ok(box.width>=48&&box.height>=48&&box.left>=0&&box.right<=viewport.width);
+    }
+    if(viewport.width<=600)assert.ok(boxes[1].top>=boxes[0].bottom,'Mobile reply controls should stack: '+JSON.stringify(boxes));
+    else assert.ok(Math.abs(boxes[0].top-boxes[1].top)<1,'Desktop reply layout should remain horizontal');
+    for(const id of ['bank-text-reply-yes','bank-text-reply-no']){
+      const button=page.locator('#'+id);
+      await button.focus();await page.keyboard.press('Space');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),id);
+      assert.equal(await page.locator('#bank-text-status').isVisible(),false);
+      assert.equal(await page.evaluate(()=>window.__floatingAudio.active),null);
+    }
+    assert.equal(await page.locator('#bank-text-reply-yes').getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('#bank-text-reply-no').getAttribute('aria-expanded'),'false');
+    assert.match(await page.locator('#bank-text-announcement').textContent(),/All clues closed/);
+    await page.locator('#bank-text-reply-yes').evaluate(e=>e.scrollIntoView({block:'center',behavior:'instant'}));
+    await page.screenshot({path:path.join(artifacts,'reply-labels-'+viewport.width+'-150.png')});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
    });

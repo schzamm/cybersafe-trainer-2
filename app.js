@@ -18,7 +18,7 @@ const lessons = [
     ],
     "correct": 1,
     "feedback": [
-      "The deadline and threat of account closure create pressure to act before checking. The link could lead to a fraudulent sign-in page that collects your password or account details. A familiar bank name does not establish that the message is legitimate.",
+      "The deadline and threat of account closure create pressure to act before checking. The link could lead to a fraudulent sign-in page that collects your password or account details. A familiar bank name does not establish that the message is legitimate. Leave the link alone and check through your usual banking app or the number on your bank card.",
       "Your usual banking app or the number on your bank card provides an independent way to check the request. The urgent deadline, threat of account closure, and request to verify details through a link are warning signs, even when the message appears to come from your bank.",
       "A verification code may authorize access to your account or a transaction. Sharing it with the sender could give someone that access. Check the request through your bank’s usual app or a trusted phone number."
     ],
@@ -27,7 +27,7 @@ const lessons = [
   {
     "title": "Verifying Family Emergency Requests",
     "summary": "Verify a person’s identity before responding to an urgent request for money.",
-    "intro": "A scammer may copy someone’s name and photo or gain access to their existing account. A familiar Messenger profile does not, by itself, confirm who is sending the message.",
+    "intro": "A scammer may copy someone’s name and photo or gain access to their existing account. A familiar Messenger profile does not, by itself, confirm who is sending the message. Independent verification means checking through a separate contact method you already trust—not one supplied in the message. Use a saved number for the person or contact another trusted family member. Even a professional-looking message can be fraudulent.",
     "signs": [
       "The sender requests money urgently and asks you not to discuss the situation with anyone else.",
       "The sender avoids a phone or video call that could help verify their identity.",
@@ -67,7 +67,7 @@ const lessons = [
     "correct": 2,
     "feedback": [
       "Knowing your name does not establish that the caller represents Medicare. End the call and verify the request using the number on your Medicare card.",
-      "An urgent payment demand and pressure to remain on the line are warning signs. End the call before sharing information or making a payment, then contact Medicare independently.",
+      "An urgent payment demand and pressure to remain on the line are warning signs. End the call before sharing information or making a payment, then dial the number on your Medicare card.",
       "Using the number on your Medicare card lets you check the request independently of the caller. This helps protect your personal information while you establish whether any action is needed."
     ],
     "takeaway": "End an unexpected call and verify the request using contact information from a trusted source."
@@ -169,12 +169,12 @@ const optionalPractice = [
       [
         "The sender requests a bill payment to an unfamiliar name while saying their banking app is unavailable.",
         true,
-        "The account name and explanation need checking before you send money. A believable everyday bill does not establish that Daniel made the request."
+        "The account name and explanation need checking before you send money. A believable everyday bill does not establish that Daniel made the request. Call Daniel’s previously saved number or another trusted family member before paying."
       ],
       [
         "The sender uses Daniel’s usual nickname for you.",
         false,
-        "A familiar nickname is not suspicious by itself, but someone else may know it. It does not independently confirm who is using the new number."
+        "A familiar nickname is not suspicious by itself, but someone else may know it. It does not independently confirm who is using the new number. Call Daniel’s previously saved number or another trusted family member before paying."
       ]
     ],
     "closing": "An ordinary bill can be used in an impersonation attempt. Verify the person through an existing trusted route before changing contact details or making a payment.",
@@ -197,12 +197,12 @@ const optionalPractice = [
       [
         "The unexpected caller asks for your Medicare number to arrange the offer.",
         true,
-        "A free offer can still be used to obtain sensitive information. Do not give your Medicare number to an unverified caller. Check independently before accepting."
+        "A free offer can still be used to obtain sensitive information. Do not give your Medicare number to an unverified caller. End the call and dial the number on your Medicare card before accepting."
       ],
       [
         "The caller says there is no need to check with your doctor or Medicare.",
         true,
-        "Discouraging a separate check is a warning sign. You can end the call and use trusted contact details to ask whether the offer is legitimate and appropriate for you."
+        "Discouraging a separate check is a warning sign. End the call and dial the number on your Medicare card to ask whether the offer is legitimate and appropriate for you."
       ],
       [
         "The caller knows your name and sounds friendly.",
@@ -220,7 +220,7 @@ const optionalPractice = [
     "correct": 0,
     "feedback": [
       "Dialing a trusted number yourself gives you an independent connection. You do not have to remain on the original call.",
-      "A transfer arranged by the unverified caller stays within the same contact. A second voice does not make it independent.",
+      "A transfer arranged by the unverified caller stays within the same contact. A second voice does not make it independent. End the call and dial the number on your Medicare card yourself.",
       "Knowing your name does not establish the caller’s identity or authority. Use the number on your Medicare card."
     ]
   },
@@ -240,7 +240,7 @@ const optionalPractice = [
       [
         "The caller is patient and does not ask for payment.",
         false,
-        "Patience and a free offer are not warning signs by themselves, but they do not prove the caller is genuine. Access to your device can be valuable even without a payment."
+        "Patience and a free offer are not warning signs by themselves, but they do not prove the caller is genuine. Access to your device can be valuable even without a payment. End the call and contact support using your device documentation or a website you already trust."
       ]
     ],
     "closing": "A routine-sounding update can still involve a risky request for access. Check who is asking and why before installing software or sharing your screen.",
@@ -268,7 +268,7 @@ const optionalPractice = [
       [
         "The app asks to read contacts and text messages to show a delivery time.",
         true,
-        "These requests would expose information beyond the delivery details you want. Do not grant access without understanding and independently verifying why it is needed."
+        "These requests would expose information beyond the delivery details you want. Do not grant access without understanding and independently verifying why it is needed. Do not install the app or grant access. Open your usual store account or delivery app yourself to check the order."
       ],
       [
         "The message includes a tracking number.",
@@ -418,7 +418,7 @@ let audioEnabled = false;
 // Defined terms already explained in each lesson's introduction.
 const lessonTerms = [
   'Phishing',
-  null,
+  'Independent verification',
   'Caller ID',
   'Remote access',
   'encrypted connection'
@@ -1198,7 +1198,7 @@ function buildBankExamples() {
       reset.disabled = count === 0;
       reset.hidden = count === 0;
       reset.textContent = count === 1 ? 'Close' : 'Close all';
-      status.hidden = count === 0;
+      status.hidden = true;
       status.textContent = count ? `${count} ${count === 1 ? 'clue open' : 'clues open'}.` : 'No clues open.';
       announcement.textContent = count ? status.textContent : 'All clues closed. You can investigate again.';
     }
@@ -1270,7 +1270,7 @@ function buildBankExamples() {
     node('p', 'Hello Alex,'),
     node('p', 'We noticed a sign-in from a new device. If this was you, no action is needed. If you do not recognize this activity, review your account below.'),
     email.clue('urgency', 'Review within 30 minutes to prevent a temporary account restriction.',
-      'A possible sign-in can feel urgent. The short deadline and threatened restriction add pressure. Do not let a timer replace a separate check.'),
+      'A possible sign-in can feel urgent. The short deadline and threatened restriction add pressure. Do not let a timer replace a separate check. Open your usual banking app yourself or call the number on your bank card.'),
     email.clue('review', 'Review account activity',
       'This button points to https://northbridge-account.example/review, not northbridge.example. Here it only reveals this explanation. In a real message, use your usual app instead of an unexpected link.', 'message-review'),
     node('p', 'Northbridge Bank · Account Security', 'message-meta'));
@@ -1284,7 +1284,7 @@ function buildBankExamples() {
     sms.clue('purchase', 'Did you attempt a $786.42 debit-card purchase at Alder Home Market?',
       'An unfamiliar, precise purchase amount can make you react quickly. The amount is not proof that a purchase happened. Check transactions independently in your usual banking app.'),
     sms.clue('request', 'Reply YES if this was you or NO if you do not recognize this purchase.',
-      'Scammers use YES/NO fraud alerts to begin a conversation, sometimes followed by a call from a fake fraud team. Some genuine alerts also use replies, so the wording alone is not proof. Verify independently before responding.'));
+      'Scammers use YES/NO fraud alerts to begin a conversation, sometimes followed by a call from a fake fraud team. Some genuine alerts also use replies, so the wording alone is not proof. Open your usual banking app yourself or call the number on your bank card before responding.'));
   sms.mock.append(bubble);
   const replies = node('div', '', 'text-replies');
   for (const answer of ['YES', 'NO']) replies.append(sms.clue('reply-' + answer.toLowerCase(), answer,
@@ -1365,14 +1365,14 @@ function renderPhishingSimulation(index) {
   }
   const sender = clue('simulation-sender', 'Investigate the Sender',
     'Full sender address:', 'security@northbridge-support.example',
-    'Compare the part after @ with the usual bank website shown above. The displayed name alone does not establish who sent the message.');
+    'Compare the part after @ with the usual bank website shown above. The displayed name alone does not establish who sent the message. Check through your usual banking app or the number on your bank card.');
   const destination = clue('simulation-destination', 'Investigate the Link',
     'The verification button displays this fictional destination as text only:',
     'https://northbridge-check.example/verify',
-    'Compare the website name with northbridge.example. Nothing opens when you inspect it.');
+    'Compare the website name with northbridge.example. Nothing opens when you inspect it. In a real message, leave the link alone and open your usual banking app yourself or call the number on your bank card.');
   const pressure = clue('simulation-pressure', 'Investigate the Warning Signs',
     'Notice the time limit:', 'within 30 minutes',
-    'A short deadline can pressure you to act before checking. You can pause and verify a request independently.');
+    'A short deadline can pressure you to act before checking. You can pause and verify a request independently. Open your usual banking app yourself or call the number on your bank card.');
   function revealDestination(open) {
     destination.reveal(open);
     verify.setAttribute('aria-expanded', String(open));

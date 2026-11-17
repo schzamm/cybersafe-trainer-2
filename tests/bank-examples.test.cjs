@@ -21,6 +21,12 @@ for (const kind of ['email', 'text']) {
       assert.equal(a.get('bank-' + kind + '-reset').disabled, false);
       assert.equal(a.get('bank-' + kind + '-status').textContent.includes(detail.textContent), false);
       assert.ok(a.get('bank-' + kind + '-status').textContent.length);
+      assert.equal(a.get('bank-' + kind + '-status').hidden, true);
+      const announcement=a.get('bank-' + kind + '-announcement');
+      assert.match(announcement.textContent,/1 clue open/);
+      assert.equal(announcement.getAttribute('role'),'status');
+      assert.equal(announcement.getAttribute('aria-atomic'),'true');
+      assert.equal(control.getAttribute('aria-describedby'),detail.id);
       a.fire(control);
       assert.equal(detail.hidden, true);
       assert.equal(a.get('bank-' + kind + '-reset').hidden, true);
@@ -54,6 +60,8 @@ test('YES and NO share one explanation and keep both control states synchronized
  assert.equal(yes.getAttribute('aria-controls'),no.getAttribute('aria-controls'));
  a.fire(yes); assert.equal(no.getAttribute('aria-expanded'),'true');
  assert.match(a.get('bank-text-status').textContent,/1 clue open/);
+ assert.equal(a.get('bank-text-status').hidden,true);
+ assert.match(a.get('bank-text-announcement').textContent,/1 clue open/);
  a.fire(no);assert.equal(yes.getAttribute('aria-expanded'),'false');
  assert.equal(a.get('bank-text-reset').disabled,true);
 });

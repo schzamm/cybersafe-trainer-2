@@ -6,6 +6,38 @@ const key = 'cybersafe-trainer.completed-lessons.v1';
 const mainCorrect = [1, 0, 2, 1, 0];
 const followupCorrect = [1, 2, 0, 1, 2];
 
+test('Lesson 2 defines independent verification using trusted existing contacts and the usual accessible term pause',()=>{
+  const a=boot();a.run('openLesson(1)');
+  const definition=a.get('lesson-introduction').querySelector('dfn');
+  assert.equal(definition.textContent,'Independent verification');
+  assert.match(a.get('lesson-introduction').textContent,/not one supplied in the message/);
+  assert.match(a.get('lesson-introduction').textContent,/professional-looking message can be fraudulent/);
+  const segments=a.run('lessonSpeechSegments(lessons[1],1,"")');
+  assert.equal(segments[0].pauseAfterMs,400);
+  assert.equal(segments[1].pauseAfterMs,200);
+  assert.ok(segments[1].text.endsWith('Independent verification'));
+  assert.match(segments[2].text,/means checking through a separate contact method/);
+  a.fire(a.get('play'));a.end();a.advance(400);
+  assert.ok(a.active().text.endsWith('Independent verification'));
+  a.end();const count=a.spoken.length;a.advance(199);assert.equal(a.spoken.length,count);
+  a.advance(1);assert.match(a.active().text,/means checking through a separate contact method/);
+  a.fire(a.get('stop'));assert.equal(a.active(),null);
+  assert.equal(a.writes.length,0);
+});
+
+test('targeted explanations include a specific independent next step in each lesson',()=>{
+  const a=boot();
+  assert.match(a.run('lessons[0].feedback[0]'),/number on your bank card/);
+  for(const choice of [1,2])assert.match(a.run('optionalPractice[1].choices['+choice+'][2]'),/Daniel’s previously saved number or another trusted family member before paying/);
+  assert.match(a.run('lessons[2].feedback[1]'),/dial the number on your Medicare card/);
+  assert.match(a.run('optionalPractice[2].feedback[1]'),/End the call and dial the number on your Medicare card yourself/);
+  assert.match(a.run('optionalPractice[3].choices[2][2]'),/End the call and contact support using your device documentation or a website you already trust/);
+  assert.match(a.run('optionalPractice[4].choices[1][2]'),/Open your usual store account or delivery app yourself/);
+  a.run('openLesson(0)');
+  for(const id of ['bank-email-urgency-detail','bank-text-request-detail','simulation-sender-detail','simulation-destination-detail','simulation-pressure-detail'])
+    assert.match(a.get(id).textContent,/number on your bank card/);
+});
+
 test('actual markup provides a labelled main landmark, focusable skip target and unique IDs', () => {
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, new Set(ids).size);
